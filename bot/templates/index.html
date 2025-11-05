@@ -958,6 +958,9 @@
                         <span class="theme-switcher-slider"></span>
                     </label>
                 </div>
+                <button class="btn btn-sm btn-outline-light ms-3" onclick="logout()" title="Выйти">
+                    <i class="fas fa-sign-out-alt me-1"></i> Выход
+                </button>
                 <span class="navbar-text ms-3">
                     <span class="telegram-status" id="telegramStatus"></span>
                     <span id="telegramStatusText" data-i18n="connection.checking">Проверка подключения...</span>
@@ -1520,7 +1523,7 @@
         // Загрузка статуса
         async function loadStatus() {
             try {
-                const response = await fetch('/api/status');
+                const response = await safeFetch('/api/status');
                 const data = await response.json();
                 
                 if (response.ok) {
@@ -1529,7 +1532,52 @@
                     console.error('Ошибка загрузки статуса:', data.error);
                 }
             } catch (error) {
-                console.error('Ошибка загрузки статуса:', error);
+                if (error.message !== 'Unauthorized') {
+                    console.error('Ошибка загрузки статуса:', error);
+                }
+            }
+        }
+        
+        // Обертка для fetch с обработкой ошибок аутентификации
+        async function safeFetch(url, options = {}) {
+            const response = await fetch(url, options);
+            
+            // Если получили 401, перенаправляем на страницу логина
+            if (response.status === 401) {
+                window.location.href = '/login';
+                throw new Error('Unauthorized');
+            }
+            
+            return response;
+        }
+        
+        // Функция для обработки ошибок аутентификации
+        function handleAuthError(response) {
+            if (response.status === 401) {
+                window.location.href = '/login';
+                return true;
+            }
+            return false;
+        }
+        
+        // Функция выхода
+        async function logout() {
+            try {
+                const response = await fetch('/logout', {
+                    method: 'POST'
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok) {
+                    window.location.href = '/login';
+                } else {
+                    showToast(data.error || 'Ошибка выхода', 'error');
+                }
+            } catch (error) {
+                console.error('Ошибка выхода:', error);
+                // Все равно перенаправляем на логин
+                window.location.href = '/login';
             }
         }
 
@@ -1773,7 +1821,7 @@
         // Загрузка списка групп
         async function loadGroups() {
             try {
-                const response = await fetch('/api/groups');
+                const response = await safeFetch('/api/groups');
                 const data = await response.json();
                 
                 if (response.ok) {
@@ -1782,7 +1830,9 @@
                     console.error('Ошибка загрузки групп:', data.error);
                 }
             } catch (error) {
-                console.error('Ошибка загрузки групп:', error);
+                if (error.message !== 'Unauthorized') {
+                    console.error('Ошибка загрузки групп:', error);
+                }
             }
         }
 
@@ -1885,7 +1935,7 @@
             setButtonLoading(addBtn, true);
             
             try {
-                const response = await fetch('/api/groups', {
+                const response = await safeFetch('/api/groups', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
@@ -1908,7 +1958,9 @@
                     showToast(data.error, 'error');
                 }
             } catch (error) {
-                showToast(t('toast.errorAddGroup'), 'error');
+                if (error.message !== 'Unauthorized') {
+                    showToast(t('toast.errorAddGroup'), 'error');
+                }
             } finally {
                 setButtonLoading(addBtn, false);
             }
@@ -1921,7 +1973,7 @@
             }
             
             try {
-                const response = await fetch(`/api/groups/${chatId}`, {
+                const response = await safeFetch(`/api/groups/${chatId}`, {
                     method: 'DELETE'
                 });
                 
@@ -1937,7 +1989,9 @@
                     showToast(data.error, 'error');
                 }
             } catch (error) {
-                showToast(t('toast.errorDeleteGroup'), 'error');
+                if (error.message !== 'Unauthorized') {
+                    showToast(t('toast.errorDeleteGroup'), 'error');
+                }
             }
         }
 
@@ -1975,7 +2029,7 @@
             setButtonLoading(setBtn, true);
             
             try {
-                const response = await fetch('/api/interval', {
+                const response = await safeFetch('/api/interval', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
@@ -2007,7 +2061,7 @@
             setButtonLoading(btn, true);
             
             try {
-                const response = await fetch('/api/post_now', {
+                const response = await safeFetch('/api/post_now', {
                     method: 'POST'
                 });
                 
@@ -2031,7 +2085,7 @@
             setButtonLoading(btn, true);
             
             try {
-                const response = await fetch('/api/scheduler/start', {
+                const response = await safeFetch('/api/scheduler/start', {
                     method: 'POST'
                 });
                 
@@ -2056,7 +2110,7 @@
             setButtonLoading(btn, true);
             
             try {
-                const response = await fetch('/api/scheduler/stop', {
+                const response = await safeFetch('/api/scheduler/stop', {
                     method: 'POST'
                 });
                 
@@ -2081,7 +2135,7 @@
             setButtonLoading(btn, true);
             
             try {
-                const response = await fetch('/api/reload_post', {
+                const response = await safeFetch('/api/reload_post', {
                     method: 'POST'
                 });
                 

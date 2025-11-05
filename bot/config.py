@@ -18,6 +18,9 @@ PHONE_NUMBER = os.getenv('PHONE_NUMBER', 'YOUR_PHONE_NUMBER_HERE')
 # ID администратора (получить у @userinfobot)
 ADMIN_ID = int(os.getenv('ADMIN_ID', '0'))
 
+# Пароль для веб-интерфейса
+WEB_PASSWORD = os.getenv('WEB_PASSWORD', 'admin')
+
 # Пути к файлам
 BASE_DIR = Path(__file__).parent
 DATA_DIR = BASE_DIR / 'data'
@@ -30,6 +33,8 @@ SESSION_FILE = DATA_DIR / 'session.session'
 MIN_DELAY = 30  # Минимальная задержка между отправками (секунды)
 MAX_DELAY = 120  # Максимальная задержка между отправками (секунды)
 DEFAULT_INTERVAL = 24  # Интервал по умолчанию (часы)
+PUBLICATION_RETRY_ATTEMPTS = 3  # Количество попыток повторной отправки при ошибке
+PUBLICATION_RETRY_DELAY = 5  # Задержка между попытками (секунды)
 
 # Проверка обязательных параметров
 if API_ID == 0:

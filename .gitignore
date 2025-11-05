@@ -54,6 +54,5 @@ Thumbs.db
 *.swp
 *~
 
-# Test files
-test_*.py
-*_test.py
+# Test files and directory
+tests/

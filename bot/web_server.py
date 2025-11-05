@@ -5,10 +5,12 @@ import asyncio
 import json
 import logging
 from datetime import datetime, timedelta
-from flask import Flask, render_template, request, jsonify, redirect, url_for
+from flask import Flask, render_template, request, jsonify, redirect, url_for, session
 from flask_cors import CORS
+from functools import wraps
 from threading import Thread
 import os
+import secrets
 
 # Используем pytz для работы с часовыми поясами (уже установлен как зависимость APScheduler)
 import pytz
@@ -16,7 +18,7 @@ import pytz
 # Московский часовой пояс
 MOSCOW_TZ = pytz.timezone('Europe/Moscow')
 
-from config import ADMIN_ID, API_ID, API_HASH, SESSION_FILE
+from config import ADMIN_ID, API_ID, API_HASH, SESSION_FILE, WEB_PASSWORD
 from db import db
 from scheduler import PostScheduler
 from telegram_client import telegram_client
@@ -26,6 +28,7 @@ from telethon import TelegramClient
 logger = logging.getLogger(__name__)
 
 app = Flask(__name__)
+app.secret_key = os.getenv('FLASK_SECRET_KEY', secrets.token_hex(32))
 CORS(app)
 
 # Глобальные переменные для управления
@@ -39,6 +42,74 @@ def set_scheduler(scheduler_instance):
     global scheduler
     scheduler = scheduler_instance
     logger.info("Планировщик установлен из main.py")
+
+def login_required(f):
+    """Декоратор для защиты endpoints от несанкционированного доступа"""
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if not session.get('authenticated'):
+            return jsonify({'error': 'Требуется аутентификация'}), 401
+        return f(*args, **kwargs)
+    return decorated_function
+
+def validate_group_input(group_input):
+    """
+    Валидация и санитизация входных данных для группы/канала
+    
+    Args:
+        group_input: Входная строка (username, ID, ссылка)
+        
+    Returns:
+        tuple: (is_valid, sanitized_input, error_message)
+    """
+    if not group_input or not isinstance(group_input, str):
+        return False, None, "Пустой ввод"
+    
+    # Удаляем пробелы
+    group_input = group_input.strip()
+    
+    if not group_input:
+        return False, None, "Пустой ввод"
+    
+    # Проверяем длину
+    if len(group_input) > 255:
+        return False, None, "Слишком длинный ввод (максимум 255 символов)"
+    
+    # Проверяем формат: username, ID или ссылка
+    # Username: @username или username
+    # ID: числовой ID (может быть отрицательным для групп)
+    # Ссылка: https://t.me/username или t.me/username
+    
+    # Очищаем от потенциально опасных символов
+    dangerous_chars = ['<', '>', '"', "'", '&', '\n', '\r']
+    for char in dangerous_chars:
+        if char in group_input:
+            return False, None, f"Недопустимый символ: {char}"
+    
+    # Нормализуем username (убираем @ если есть)
+    if group_input.startswith('@'):
+        sanitized = group_input[1:]
+    elif group_input.startswith('https://t.me/'):
+        sanitized = group_input.replace('https://t.me/', '').strip()
+    elif group_input.startswith('t.me/'):
+        sanitized = group_input.replace('t.me/', '').strip()
+    elif group_input.startswith('http://t.me/'):
+        sanitized = group_input.replace('http://t.me/', '').strip()
+    else:
+        # Проверяем, является ли это числовым ID
+        try:
+            int(group_input)
+            sanitized = group_input
+        except ValueError:
+            # Если не число, считаем что это username без @
+            sanitized = group_input
+    
+    # Проверяем формат username (только буквы, цифры, подчеркивание)
+    if sanitized and not sanitized.startswith('-') and not sanitized.lstrip('-').isdigit():
+        if not all(c.isalnum() or c == '_' for c in sanitized):
+            return False, None, "Недопустимый формат username (только буквы, цифры и подчеркивание)"
+    
+    return True, sanitized, None
 
 def run_async(coro):
     """Запуск асинхронной функции"""
@@ -197,9 +268,52 @@ def init_web_server():
 @app.route('/')
 def index():
     """Главная страница"""
+    if not session.get('authenticated'):
+        return redirect(url_for('login'))
     return render_template('index.html')
 
+@app.route('/login', methods=['GET', 'POST'])
+def login():
+    """Страница входа"""
+    if request.method == 'POST':
+        password = request.form.get('password', '')
+        if password == WEB_PASSWORD:
+            session['authenticated'] = True
+            session.permanent = True
+            return jsonify({'success': True, 'redirect': '/'})
+        else:
+            return jsonify({'success': False, 'error': 'Неверный пароль'}), 401
+    
+    # GET запрос - показываем страницу входа
+    if session.get('authenticated'):
+        return redirect(url_for('index'))
+    return render_template('login.html')
+
+@app.route('/logout', methods=['POST'])
+def logout():
+    """Выход из системы"""
+    session.pop('authenticated', None)
+    return jsonify({'success': True, 'redirect': '/login'})
+
+@app.route('/api/login', methods=['POST'])
+def api_login():
+    """API для аутентификации"""
+    try:
+        data = request.get_json()
+        password = data.get('password', '')
+        
+        if password == WEB_PASSWORD:
+            session['authenticated'] = True
+            session.permanent = True
+            return jsonify({'success': True})
+        else:
+            return jsonify({'success': False, 'error': 'Неверный пароль'}), 401
+    except Exception as e:
+        logger.error(f"Ошибка аутентификации: {e}")
+        return jsonify({'error': str(e)}), 500
+
 @app.route('/api/status')
+@login_required
 def api_status():
     """API для получения статуса системы"""
     try:
@@ -272,6 +386,7 @@ def api_status():
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/groups')
+@login_required
 def api_groups():
     """API для получения списка групп"""
     try:
@@ -333,14 +448,20 @@ def api_groups():
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/groups', methods=['POST'])
+@login_required
 def api_add_group():
     """API для добавления группы"""
     try:
+        # Валидация входных данных
         data = request.get_json()
-        group_input = data.get('group_input', '').strip()
+        group_input = data.get('group_input', '')
         
-        if not group_input:
-            return jsonify({'error': 'Не указан идентификатор группы'}), 400
+        is_valid, sanitized_input, error_message = validate_group_input(group_input)
+        if not is_valid:
+            return jsonify({'error': error_message or 'Неверный формат группы'}), 400
+        
+        # Используем очищенный ввод
+        group_input = sanitized_input
         
         # Получаем информацию о чате
         try:
@@ -358,12 +479,16 @@ def api_add_group():
             return jsonify({'error': f'Ошибка при получении информации о чате: {str(e)}'}), 400
         
         # Добавляем группу в базу данных
-        # Извлекаем username из group_input если это username
+        # Извлекаем username из sanitized_input если это username (не числовой ID)
         username = None
-        if group_input.startswith('@'):
-            username = group_input
-        elif group_input.startswith('https://t.me/'):
-            username = '@' + group_input.split('/')[-1]
+        # Проверяем, является ли sanitized_input числовым ID
+        try:
+            int(sanitized_input.lstrip('-'))
+            # Это числовой ID, username будет None
+            username = None
+        except ValueError:
+            # Это не числовой ID, значит это username
+            username = '@' + sanitized_input if not sanitized_input.startswith('@') else sanitized_input
         
         success = run_async(db.add_group(chat_id, title, username))
         
@@ -385,6 +510,7 @@ def api_add_group():
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/groups/<chat_id>', methods=['DELETE'])
+@login_required
 def api_remove_group(chat_id):
     """API для удаления группы"""
     try:
@@ -400,6 +526,7 @@ def api_remove_group(chat_id):
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/interval', methods=['POST'])
+@login_required
 def api_set_interval():
     """API для установки интервала публикации"""
     try:
@@ -457,6 +584,7 @@ def api_set_interval():
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/post_now', methods=['POST'])
+@login_required
 def api_post_now():
     """API для немедленной публикации"""
     try:
@@ -473,6 +601,7 @@ def api_post_now():
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/scheduler/start', methods=['POST'])
+@login_required
 def api_start_scheduler():
     """API для запуска планировщика"""
     try:
@@ -507,6 +636,7 @@ def api_start_scheduler():
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/scheduler/stop', methods=['POST'])
+@login_required
 def api_stop_scheduler():
     """API для остановки планировщика"""
     try:
@@ -522,6 +652,7 @@ def api_stop_scheduler():
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/reload_post', methods=['POST'])
+@login_required
 def api_reload_post():
     """API для перезагрузки поста"""
     try:
@@ -553,6 +684,7 @@ def api_reload_post():
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/reset_publication_status', methods=['POST'])
+@login_required
 def api_reset_publication_status():
     """API для сброса статуса публикации"""
     try:

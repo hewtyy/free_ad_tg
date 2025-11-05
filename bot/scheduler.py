@@ -9,7 +9,7 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.interval import IntervalTrigger
 from apscheduler.executors.asyncio import AsyncIOExecutor
 from apscheduler.jobstores.memory import MemoryJobStore
-from config import MIN_DELAY, MAX_DELAY
+from config import MIN_DELAY, MAX_DELAY, PUBLICATION_RETRY_ATTEMPTS, PUBLICATION_RETRY_DELAY
 from db import db
 from handlers.post import PostHandler
 
@@ -321,7 +321,9 @@ class PostScheduler:
                     
                     # Публикуем пост, используя username если доступен
                     target = username if username else chat_id
-                    success = await self.post_handler.send_post_to_group(target)
+                    
+                    # Пытаемся отправить пост с повторными попытками
+                    success = await self._send_post_with_retry(target, group_name, i+1, len(groups))
                     
                     if success:
                         # Обновляем время последней публикации
@@ -329,7 +331,7 @@ class PostScheduler:
                         logger.info(f"✅ [{i+1}/{len(groups)}] Пост отправлен в группу {group_name}")
                         self._update_status(f"✅ Группа {i+1}/{len(groups)}: {group_name} - успешно")
                     else:
-                        error_msg = f"Ошибка отправки в группу {group_name}"
+                        error_msg = f"Ошибка отправки в группу {group_name} после {PUBLICATION_RETRY_ATTEMPTS} попыток"
                         logger.error(f"❌ [{i+1}/{len(groups)}] {error_msg}")
                         self.publication_status['errors'].append({
                             'group': group_name,
@@ -401,6 +403,44 @@ class PostScheduler:
                 'current_step': 'Завершено' if (not is_scheduled_job or self.is_running) else 'Прервано',
                 'last_update': datetime.now(pytz.utc).astimezone(MOSCOW_TZ)
             })
+    
+    async def _send_post_with_retry(self, target: str, group_name: str, current: int, total: int) -> bool:
+        """
+        Отправка поста с повторными попытками при ошибках
+        
+        Args:
+            target: Целевой чат (username или chat_id)
+            group_name: Название группы для логирования
+            current: Номер текущей группы
+            total: Всего групп
+            
+        Returns:
+            True если отправка успешна, False если все попытки исчерпаны
+        """
+        for attempt in range(1, PUBLICATION_RETRY_ATTEMPTS + 1):
+            try:
+                success = await self.post_handler.send_post_to_group(target)
+                
+                if success:
+                    if attempt > 1:
+                        logger.info(f"✅ [{current}/{total}] Пост отправлен в группу {group_name} после {attempt} попыток")
+                    return True
+                else:
+                    if attempt < PUBLICATION_RETRY_ATTEMPTS:
+                        logger.warning(f"⚠️ [{current}/{total}] Попытка {attempt}/{PUBLICATION_RETRY_ATTEMPTS} не удалась для {group_name}. Повтор через {PUBLICATION_RETRY_DELAY} сек...")
+                        await asyncio.sleep(PUBLICATION_RETRY_DELAY)
+                    else:
+                        logger.error(f"❌ [{current}/{total}] Все {PUBLICATION_RETRY_ATTEMPTS} попыток отправки в {group_name} не удались")
+                        return False
+            except Exception as e:
+                if attempt < PUBLICATION_RETRY_ATTEMPTS:
+                    logger.warning(f"⚠️ [{current}/{total}] Исключение при попытке {attempt}/{PUBLICATION_RETRY_ATTEMPTS} для {group_name}: {e}. Повтор через {PUBLICATION_RETRY_DELAY} сек...")
+                    await asyncio.sleep(PUBLICATION_RETRY_DELAY)
+                else:
+                    logger.error(f"❌ [{current}/{total}] Исключение после всех {PUBLICATION_RETRY_ATTEMPTS} попыток для {group_name}: {e}")
+                    return False
+        
+        return False
     
     def _update_status(self, step: str):
         """Обновление статуса публикации"""
