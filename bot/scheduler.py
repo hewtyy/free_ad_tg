@@ -13,6 +13,12 @@ from config import MIN_DELAY, MAX_DELAY
 from db import db
 from handlers.post import PostHandler
 
+# Используем pytz для работы с часовыми поясами (уже установлен как зависимость APScheduler)
+import pytz
+
+# Московский часовой пояс
+MOSCOW_TZ = pytz.timezone('Europe/Moscow')
+
 # Настройка логирования
 logger = logging.getLogger(__name__)
 
@@ -54,6 +60,15 @@ class PostScheduler:
             'errors': []
         }
     
+    def reload_post(self):
+        """Перезагрузка содержимого поста из файлов"""
+        logger.info("Перезагрузка поста в планировщике...")
+        if self.post_handler:
+            self.post_handler._load_post_content()
+            logger.info("Пост успешно перезагружен в планировщике")
+        else:
+            logger.warning("post_handler не инициализирован в планировщике")
+    
     async def start(self):
         """Запуск планировщика"""
         try:
@@ -65,6 +80,7 @@ class PostScheduler:
             
             # Устанавливаем флаг запуска ПЕРЕД добавлением задачи
             self.is_running = True
+            logger.info(f"✅ Флаг is_running установлен в True")
             
             # Если планировщик не запущен, запускаем его
             if not self.scheduler.running:
@@ -82,6 +98,7 @@ class PostScheduler:
                 id='post_job',
                 replace_existing=True
             )
+            logger.info(f"✅ Задача 'post_job' добавлена в планировщик")
             
             # Форматируем интервал для вывода
             if interval_minutes < 60:
@@ -196,33 +213,55 @@ class PostScheduler:
         """
         Немедленная публикация постов во все группы
         """
+        logger.info("🚀 Запуск немедленной публикации...")
         print("Запуск немедленной публикации...")
-        await self._scheduled_post()
+        
+        # Временно устанавливаем флаг для немедленной публикации
+        # Сохраняем исходное состояние
+        original_is_running = self.is_running
+        self.is_running = True
+        
+        try:
+            await self._scheduled_post()
+        finally:
+            # Восстанавливаем исходное состояние только если планировщик не был запущен
+            if not original_is_running and not self.scheduler.running:
+                self.is_running = False
     
     async def _scheduled_post(self):
         """
         Выполнение запланированной публикации с задержками между группами
         """
-        # Проверяем, запущен ли планировщик перед выполнением
-        if not self.is_running:
-            logger.warning("⚠️ Планировщик остановлен, публикация отменена")
-            return
-        
-        # Дополнительная проверка - есть ли задача в планировщике
+        # Определяем, является ли это запланированной задачей или немедленной публикацией
+        # Для этого проверяем, есть ли задача в планировщике
         job = self.scheduler.get_job('post_job')
-        if not job:
-            logger.warning("⚠️ Задача не найдена в планировщике, публикация отменена")
-            return
+        is_scheduled_job = job is not None
+        
+        logger.info(f"📋 Запуск публикации: is_scheduled_job={is_scheduled_job}, is_running={self.is_running}, scheduler.running={self.scheduler.running if hasattr(self.scheduler, 'running') else 'N/A'}")
+        
+        # Для запланированных задач проверяем флаг запуска
+        # Для немедленной публикации (post_now) флаг будет установлен временно
+        # Но если планировщик работает и есть задача, значит это запланированная публикация
+        if is_scheduled_job:
+            # Для запланированных задач проверяем флаг is_running
+            if not self.is_running:
+                logger.warning("⚠️ Планировщик остановлен, публикация отменена")
+                return
+        # Для немедленной публикации (post_now) проверка не нужна, т.к. флаг уже установлен
         
         # Инициализируем статус публикации
+        # Получаем текущее время в UTC и конвертируем в московское
+        utc_now = datetime.now(pytz.utc)
+        moscow_now = utc_now.astimezone(MOSCOW_TZ)
+        
         self.publication_status.update({
             'is_publishing': True,
             'current_step': 'Инициализация',
             'total_groups': 0,
             'completed_groups': 0,
             'current_group': None,
-            'start_time': datetime.now(),
-            'last_update': datetime.now(),
+            'start_time': moscow_now,
+            'last_update': moscow_now,
             'errors': []
         })
         
@@ -230,8 +269,8 @@ class PostScheduler:
             logger.info("🚀 Начинаем процесс публикации постов")
             self._update_status("Получение списка групп...")
             
-            # Проверяем статус перед началом публикации
-            if not self.is_running:
+            # Проверяем статус перед началом публикации только для запланированных задач
+            if is_scheduled_job and not self.is_running:
                 logger.warning("⚠️ Планировщик остановлен перед началом публикации")
                 return
             
@@ -253,8 +292,8 @@ class PostScheduler:
             self._update_status(f"Публикация в {len(groups)} групп")
             
             for i, group in enumerate(groups):
-                # Проверяем статус перед каждой публикацией
-                if not self.is_running:
+                # Проверяем статус перед каждой публикацией только для запланированных задач
+                if is_scheduled_job and not self.is_running:
                     logger.warning(f"⚠️ Планировщик остановлен во время публикации. Остановлено на группе {i+1}/{len(groups)}")
                     self._update_status(f"Публикация остановлена на группе {i+1}/{len(groups)}")
                     break
@@ -295,7 +334,7 @@ class PostScheduler:
                         self.publication_status['errors'].append({
                             'group': group_name,
                             'error': error_msg,
-                            'time': datetime.now()
+                            'time': datetime.now(pytz.utc).astimezone(MOSCOW_TZ)
                         })
                         self._update_status(f"❌ Группа {i+1}/{len(groups)}: {group_name} - ошибка")
                     
@@ -308,16 +347,20 @@ class PostScheduler:
                         logger.info(f"⏳ Ожидание {delay} секунд перед следующей отправкой...")
                         self._update_status(f"Ожидание {delay} секунд...")
                         
-                        # Проверяем статус во время задержки
-                        for _ in range(delay):
+                        # Проверяем статус во время задержки только для запланированных задач
+                        if is_scheduled_job:
+                            for _ in range(delay):
+                                if not self.is_running:
+                                    logger.warning("⚠️ Планировщик остановлен во время задержки")
+                                    break
+                                await asyncio.sleep(1)
+                            
+                            # Если планировщик остановлен, прекращаем публикацию
                             if not self.is_running:
-                                logger.warning("⚠️ Планировщик остановлен во время задержки")
                                 break
-                            await asyncio.sleep(1)
-                        
-                        # Если планировщик остановлен, прекращаем публикацию
-                        if not self.is_running:
-                            break
+                        else:
+                            # Для немедленной публикации просто ждем
+                            await asyncio.sleep(delay)
                 
                 except Exception as e:
                     error_msg = f"Ошибка при публикации в группу {chat_id}: {e}"
@@ -325,13 +368,13 @@ class PostScheduler:
                     self.publication_status['errors'].append({
                         'group': chat_id,
                         'error': error_msg,
-                        'time': datetime.now()
+                            'time': datetime.now(pytz.utc).astimezone(MOSCOW_TZ)
                     })
                     continue
             
             # Завершаем публикацию
             total_errors = len(self.publication_status['errors'])
-            if not self.is_running:
+            if is_scheduled_job and not self.is_running:
                 logger.warning("⚠️ Публикация прервана из-за остановки планировщика")
                 self._update_status("Публикация прервана")
             elif total_errors == 0:
@@ -347,7 +390,7 @@ class PostScheduler:
             self.publication_status['errors'].append({
                 'group': 'SYSTEM',
                 'error': error_msg,
-                'time': datetime.now()
+                            'time': datetime.now(pytz.utc).astimezone(MOSCOW_TZ)
             })
             self._update_status(f"Критическая ошибка: {e}")
         finally:
@@ -355,14 +398,16 @@ class PostScheduler:
             # Не сбрасываем сразу, чтобы показать финальный статус
             self.publication_status.update({
                 'is_publishing': False,
-                'current_step': 'Завершено' if self.is_running else 'Прервано',
-                'last_update': datetime.now()
+                'current_step': 'Завершено' if (not is_scheduled_job or self.is_running) else 'Прервано',
+                'last_update': datetime.now(pytz.utc).astimezone(MOSCOW_TZ)
             })
     
     def _update_status(self, step: str):
         """Обновление статуса публикации"""
         self.publication_status['current_step'] = step
-        self.publication_status['last_update'] = datetime.now()
+        # Получаем текущее время в UTC и конвертируем в московское
+        utc_now = datetime.now(pytz.utc)
+        self.publication_status['last_update'] = utc_now.astimezone(MOSCOW_TZ)
         logger.info(f"📊 Статус: {step}")
     
     def get_next_run_time(self) -> datetime:
@@ -438,14 +483,33 @@ class PostScheduler:
             else:
                 status['progress_percent'] = 0
         
-        # Форматируем время
+        # Форматируем время в московском часовом поясе
+        # Время уже должно быть в московском часовом поясе
         if status['start_time']:
-            status['start_time_str'] = status['start_time'].strftime('%H:%M:%S')
+            start_time = status['start_time']
+            # Убеждаемся, что время в московском часовом поясе
+            if start_time.tzinfo is None:
+                # Если naive datetime, считаем что это UTC и конвертируем
+                start_time = pytz.utc.localize(start_time).astimezone(MOSCOW_TZ)
+            elif start_time.tzinfo != MOSCOW_TZ:
+                # Если не в московском часовом поясе, конвертируем
+                start_time = start_time.astimezone(MOSCOW_TZ)
+            # Форматируем время - оно уже в московском часовом поясе
+            status['start_time_str'] = start_time.strftime('%H:%M:%S')
         else:
             status['start_time_str'] = None
             
         if status['last_update']:
-            status['last_update_str'] = status['last_update'].strftime('%H:%M:%S')
+            last_update = status['last_update']
+            # Убеждаемся, что время в московском часовом поясе
+            if last_update.tzinfo is None:
+                # Если naive datetime, считаем что это UTC и конвертируем
+                last_update = pytz.utc.localize(last_update).astimezone(MOSCOW_TZ)
+            elif last_update.tzinfo != MOSCOW_TZ:
+                # Если не в московском часовом поясе, конвертируем
+                last_update = last_update.astimezone(MOSCOW_TZ)
+            # Форматируем время - оно уже в московском часовом поясе
+            status['last_update_str'] = last_update.strftime('%H:%M:%S')
         else:
             status['last_update_str'] = None
         

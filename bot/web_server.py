@@ -10,6 +10,12 @@ from flask_cors import CORS
 from threading import Thread
 import os
 
+# Используем pytz для работы с часовыми поясами (уже установлен как зависимость APScheduler)
+import pytz
+
+# Московский часовой пояс
+MOSCOW_TZ = pytz.timezone('Europe/Moscow')
+
 from config import ADMIN_ID, API_ID, API_HASH, SESSION_FILE
 from db import db
 from scheduler import PostScheduler
@@ -137,27 +143,40 @@ if __name__ == "__main__":
         os.unlink(script_path)
 
 def _format_timestamp(timestamp):
-    """Форматирование временной метки"""
+    """Форматирование временной метки в московском часовом поясе"""
     if not timestamp:
         return "Никогда"
     
     try:
-        # Если это уже строка, возвращаем как есть
+        # Если это уже строка, пытаемся распарсить её
         if isinstance(timestamp, str):
-            return timestamp
+            # Пробуем разные форматы времени из БД
+            from datetime import datetime as dt
+            try:
+                # Формат из SQLite: "2025-11-05 18:21:22"
+                parsed_time = dt.strptime(timestamp, '%Y-%m-%d %H:%M:%S')
+                # Считаем что это UTC время из базы данных
+                utc_time = pytz.utc.localize(parsed_time)
+                moscow_time = utc_time.astimezone(MOSCOW_TZ)
+                return moscow_time.strftime('%d.%m.%Y %H:%M:%S')
+            except ValueError:
+                # Если не удалось распарсить, возвращаем как есть
+                return timestamp
         # Если это datetime объект, форматируем
         elif hasattr(timestamp, 'strftime'):
-            # Если это naive datetime, считаем что это UTC и конвертируем в московское время
+            # Конвертируем в московское время
             if timestamp.tzinfo is None:
-                from datetime import timezone
-                utc_time = timestamp.replace(tzinfo=timezone.utc)
-                local_time = utc_time.astimezone(timezone(timedelta(hours=3)))
-                return local_time.strftime('%d.%m.%Y %H:%M:%S')
+                # Если naive datetime, считаем что это UTC и конвертируем в московское время
+                utc_time = pytz.utc.localize(timestamp)
+                moscow_time = utc_time.astimezone(MOSCOW_TZ)
             else:
-                return timestamp.strftime('%d.%m.%Y %H:%M:%S')
+                # Если уже с timezone, конвертируем в московское время
+                moscow_time = timestamp.astimezone(MOSCOW_TZ)
+            return moscow_time.strftime('%d.%m.%Y %H:%M:%S')
         else:
             return str(timestamp)
-    except Exception:
+    except Exception as e:
+        logger.error(f"Ошибка форматирования времени: {e}, timestamp: {timestamp}")
         return "Неизвестно"
 
 def init_web_server():
@@ -206,7 +225,7 @@ def api_status():
         
         # Статус планировщика
         scheduler_status = "Не инициализирован"
-        next_run = "Неизвестно"
+        next_run = None  # Используем None вместо "Неизвестно", чтобы клиент мог форматировать
         publication_status = None
         
         if scheduler:
@@ -217,25 +236,23 @@ def api_status():
             publication_status = scheduler.get_publication_status()
             
             if status_info['next_run']:
-                # Конвертируем UTC время в локальное время для отображения
+                # Конвертируем UTC время в московское время для отображения
                 next_run_time = status_info['next_run']
                 logger.info(f"Next run time: {next_run_time}, type: {type(next_run_time)}")
                 
+                # Конвертируем в московское время
                 if hasattr(next_run_time, 'astimezone'):
                     # Если это datetime объект с timezone, конвертируем в московское время
-                    from datetime import timezone
-                    moscow_tz = timezone(timedelta(hours=3))
-                    local_time = next_run_time.astimezone(moscow_tz)
+                    moscow_time = next_run_time.astimezone(MOSCOW_TZ)
                 else:
                     # Если это naive datetime, считаем что это UTC
                     from datetime import timezone
                     utc_time = next_run_time.replace(tzinfo=timezone.utc)
-                    # Добавляем 3 часа для московского времени (UTC+3)
-                    local_time = utc_time.astimezone(timezone(timedelta(hours=3)))
+                    moscow_time = utc_time.astimezone(MOSCOW_TZ)
                 
-                logger.info(f"Local time: {local_time}")
+                logger.info(f"Moscow time: {moscow_time}")
                 # Форматируем время в московском часовом поясе
-                next_run = local_time.strftime('%d.%m.%Y %H:%M:%S')
+                next_run = moscow_time.strftime('%d.%m.%Y %H:%M:%S')
         
         # Информация о посте
         post_info = post_handler.get_post_info() if post_handler else {}
@@ -462,16 +479,23 @@ def api_start_scheduler():
         if not scheduler:
             return jsonify({'error': 'Планировщик не инициализирован'}), 500
         
-        # Запускаем планировщик в отдельном потоке
+        # Запускаем планировщик в отдельном потоке с постоянным event loop
         import threading
         def start_scheduler_thread():
             try:
                 # Создаем новый event loop для планировщика
                 loop = asyncio.new_event_loop()
                 asyncio.set_event_loop(loop)
+                
+                # Запускаем планировщик
                 loop.run_until_complete(scheduler.start())
+                
+                # Запускаем event loop постоянно, чтобы планировщик мог работать
+                loop.run_forever()
             except Exception as e:
                 logger.error(f"Ошибка в потоке планировщика: {e}")
+                import traceback
+                logger.error(traceback.format_exc())
         
         thread = threading.Thread(target=start_scheduler_thread, daemon=True)
         thread.start()
@@ -502,10 +526,21 @@ def api_reload_post():
     """API для перезагрузки поста"""
     try:
         if not post_handler:
+            logger.error("post_handler не инициализирован")
             return jsonify({'error': 'Обработчик постов не инициализирован'}), 500
         
+        logger.info("Начинаем перезагрузку поста...")
+        
+        # Перезагружаем пост в веб-сервере
         post_handler._load_post_content()
         post_info = post_handler.get_post_info()
+        
+        # Перезагружаем пост в планировщике (если он есть)
+        if scheduler:
+            scheduler.reload_post()
+            logger.info("Пост перезагружен и в планировщике")
+        
+        logger.info(f"Пост успешно перезагружен: {post_info}")
         
         return jsonify({
             'success': True,
@@ -514,7 +549,7 @@ def api_reload_post():
         })
         
     except Exception as e:
-        logger.error(f"Ошибка перезагрузки поста: {e}")
+        logger.error(f"Ошибка перезагрузки поста: {e}", exc_info=True)
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/reset_publication_status', methods=['POST'])

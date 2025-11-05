@@ -22,21 +22,23 @@ class PostHandler:
             if POST_TEXT_FILE.exists():
                 with open(POST_TEXT_FILE, 'r', encoding='utf-8') as f:
                     self.post_text = f.read().strip()
-                print(f"Текст поста загружен из {POST_TEXT_FILE}")
+                print(f"✓ Текст поста загружен из {POST_TEXT_FILE} ({len(self.post_text)} символов)")
             else:
                 self.post_text = "Тестовый пост для автоматической публикации"
-                print("Файл с текстом поста не найден, используется текст по умолчанию")
+                print(f"⚠ Файл с текстом поста не найден ({POST_TEXT_FILE}), используется текст по умолчанию")
             
             # Проверяем наличие изображения
             if POST_IMAGE_FILE.exists():
                 self.post_image_path = POST_IMAGE_FILE
-                print(f"Изображение найдено: {POST_IMAGE_FILE}")
+                print(f"✓ Изображение найдено: {POST_IMAGE_FILE}")
             else:
                 self.post_image_path = None
-                print("Файл с изображением не найден, будет отправлен только текст")
+                print(f"ℹ Файл с изображением не найден ({POST_IMAGE_FILE}), будет отправлен только текст")
                 
         except Exception as e:
-            print(f"Ошибка при загрузке содержимого поста: {e}")
+            print(f"❌ Ошибка при загрузке содержимого поста: {e}")
+            import traceback
+            traceback.print_exc()
             self.post_text = "Ошибка загрузки поста"
             self.post_image_path = None
     
