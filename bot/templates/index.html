@@ -1,0 +1,784 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Система публикации постов</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        .status-card {
+            transition: all 0.3s ease;
+        }
+        .status-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+        }
+        .telegram-status {
+            display: inline-block;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            margin-right: 8px;
+        }
+        .telegram-connected {
+            background-color: #28a745;
+        }
+        .telegram-disconnected {
+            background-color: #dc3545;
+        }
+        .group-item {
+            border-left: 4px solid #007bff;
+            transition: all 0.3s ease;
+        }
+        .group-item:hover {
+            border-left-color: #0056b3;
+            background-color: #f8f9fa;
+        }
+        .loading {
+            display: none;
+        }
+        .btn-loading {
+            position: relative;
+        }
+        .btn-loading .spinner-border {
+            width: 1rem;
+            height: 1rem;
+            margin-right: 0.5rem;
+        }
+    </style>
+</head>
+<body class="bg-light">
+    <nav class="navbar navbar-dark bg-primary">
+        <div class="container">
+            <span class="navbar-brand mb-0 h1">
+                <i class="fas fa-paper-plane me-2"></i>
+                Система публикации постов
+            </span>
+            <div class="navbar-nav">
+                <span class="navbar-text">
+                    <span class="telegram-status" id="telegramStatus"></span>
+                    <span id="telegramStatusText">Проверка подключения...</span>
+                </span>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container mt-4">
+        <!-- Статус системы -->
+        <div class="row mb-4">
+            <div class="col-md-3">
+                <div class="card status-card">
+                    <div class="card-body text-center">
+                        <i class="fas fa-users fa-2x text-primary mb-2"></i>
+                        <h5 class="card-title">Группы</h5>
+                        <h3 class="text-primary" id="groupsCount">-</h3>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card status-card">
+                    <div class="card-body text-center">
+                        <i class="fas fa-clock fa-2x text-success mb-2"></i>
+                        <h5 class="card-title">Интервал</h5>
+                        <h3 class="text-success" id="interval">-</h3>
+                        <small class="text-muted">часов</small>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card status-card">
+                    <div class="card-body text-center">
+                        <i class="fas fa-cogs fa-2x text-warning mb-2"></i>
+                        <h5 class="card-title">Планировщик</h5>
+                        <span class="badge" id="schedulerStatus">-</span>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card status-card">
+                    <div class="card-body text-center">
+                        <i class="fas fa-calendar-alt fa-2x text-info mb-2"></i>
+                        <h5 class="card-title">Следующая публикация</h5>
+                        <small id="nextRun">-</small>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card status-card">
+                    <div class="card-body text-center">
+                        <i class="fas fa-paper-plane fa-2x text-primary mb-2"></i>
+                        <h5 class="card-title">Статус публикации</h5>
+                        <span class="badge" id="publicationStatus">-</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Статус публикации -->
+        <div class="row mb-4" id="publicationStatusPanel" style="display: none;">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-header">
+                        <h5><i class="fas fa-tasks me-2"></i>Детальный статус публикации</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row">
+                            <div class="col-md-6">
+                                <h6>Текущий этап:</h6>
+                                <p id="currentStep" class="text-muted">-</p>
+                                
+                                <h6>Прогресс:</h6>
+                                <div class="progress mb-2">
+                                    <div class="progress-bar" id="progressBar" role="progressbar" style="width: 0%"></div>
+                                </div>
+                                <small id="progressText" class="text-muted">0% (0/0)</small>
+                            </div>
+                            <div class="col-md-6">
+                                <h6>Время начала:</h6>
+                                <p id="startTime" class="text-muted">-</p>
+                                
+                                <h6>Последнее обновление:</h6>
+                                <p id="lastUpdate" class="text-muted">-</p>
+                            </div>
+                        </div>
+                        
+                        <div id="errorsSection" style="display: none;">
+                            <h6 class="text-danger">Ошибки:</h6>
+                            <div id="errorsList" class="list-group"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Управление -->
+        <div class="row mb-4">
+            <div class="col-md-6">
+                <div class="card">
+                    <div class="card-header">
+                        <h5><i class="fas fa-play-circle me-2"></i>Быстрые действия</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="d-grid gap-2">
+                            <button class="btn btn-success btn-loading" id="postNowBtn">
+                                <span class="loading spinner-border spinner-border-sm" role="status"></span>
+                                <i class="fas fa-paper-plane me-2"></i>Опубликовать сейчас
+                            </button>
+                            <div class="btn-group" role="group">
+                                <button class="btn btn-primary btn-loading" id="startSchedulerBtn">
+                                    <span class="loading spinner-border spinner-border-sm" role="status"></span>
+                                    <i class="fas fa-play me-2"></i>Запустить
+                                </button>
+                                <button class="btn btn-warning btn-loading" id="stopSchedulerBtn">
+                                    <span class="loading spinner-border spinner-border-sm" role="status"></span>
+                                    <i class="fas fa-stop me-2"></i>Остановить
+                                </button>
+                            </div>
+                            <button class="btn btn-info btn-loading" id="reloadPostBtn">
+                                <span class="loading spinner-border spinner-border-sm" role="status"></span>
+                                <i class="fas fa-sync me-2"></i>Перезагрузить пост
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="card">
+                    <div class="card-header">
+                        <h5><i class="fas fa-cog me-2"></i>Настройки</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="mb-3">
+                            <label for="intervalInput" class="form-label">Интервал публикации</label>
+                            <div class="input-group">
+                                <input type="number" class="form-control" id="intervalInput" min="1" max="10080" value="24" placeholder="Введите число">
+                                <select class="form-select" id="intervalUnit" style="max-width: 100px;">
+                                    <option value="minutes">мин</option>
+                                    <option value="hours" selected>часов</option>
+                                </select>
+                                <button class="btn btn-outline-primary" id="setIntervalBtn">Установить</button>
+                            </div>
+                            <small class="form-text text-muted">Максимум: 10080 минут (7 дней)</small>
+                            <small class="form-text text-muted">Минимум: 1 минута. Для тестирования можно установить 1-5 минут.</small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Управление группами -->
+        <div class="row">
+            <div class="col-md-6">
+                <div class="card">
+                    <div class="card-header">
+                        <h5><i class="fas fa-plus-circle me-2"></i>Добавить группу/канал</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="mb-3">
+                            <label for="groupInput" class="form-label">Ссылка, @username или ID</label>
+                            <input type="text" class="form-control" id="groupInput" 
+                                   placeholder="@group_name, -1001234567890, https://t.me/group_name">
+                        </div>
+                        <button class="btn btn-primary btn-loading" id="addGroupBtn">
+                            <span class="loading spinner-border spinner-border-sm" role="status"></span>
+                            <i class="fas fa-plus me-2"></i>Добавить
+                        </button>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="card">
+                    <div class="card-header">
+                        <h5><i class="fas fa-list me-2"></i>Список групп/каналов</h5>
+                    </div>
+                    <div class="card-body">
+                        <div id="groupsList">
+                            <div class="text-center text-muted">
+                                <i class="fas fa-spinner fa-spin"></i> Загрузка...
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast для уведомлений -->
+    <div class="toast-container position-fixed bottom-0 end-0 p-3">
+        <div id="toast" class="toast" role="alert">
+            <div class="toast-header">
+                <i class="fas fa-info-circle text-primary me-2"></i>
+                <strong class="me-auto">Уведомление</strong>
+                <button type="button" class="btn-close" data-bs-dismiss="toast"></button>
+            </div>
+            <div class="toast-body" id="toastBody">
+                <!-- Сообщение будет вставлено сюда -->
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        // Глобальные переменные
+        let statusInterval;
+        let groupsInterval;
+
+        // Инициализация
+        document.addEventListener('DOMContentLoaded', function() {
+            loadStatus();
+            loadGroups();
+            
+            // Автообновление статуса каждые 2 секунды
+            setInterval(() => {
+                loadStatus();
+            }, 2000);
+            
+            // Обновляем статус каждые 5 секунд
+            statusInterval = setInterval(loadStatus, 5000);
+            groupsInterval = setInterval(loadGroups, 10000);
+            
+            // Обработчики событий
+            setupEventListeners();
+            
+            // Инициализируем поле ввода интервала
+            setTimeout(() => {
+                const intervalInput = document.getElementById('intervalInput');
+                const intervalUnit = document.getElementById('intervalUnit');
+                if (intervalInput && !intervalInput.value) {
+                    intervalInput.value = 24; // Значение по умолчанию в часах
+                    if (intervalUnit) {
+                        intervalUnit.value = 'hours';
+                    }
+                }
+            }, 1000);
+        });
+
+        // Загрузка статуса
+        async function loadStatus() {
+            try {
+                const response = await fetch('/api/status');
+                const data = await response.json();
+                
+                if (response.ok) {
+                    updateStatus(data);
+                } else {
+                    console.error('Ошибка загрузки статуса:', data.error);
+                }
+            } catch (error) {
+                console.error('Ошибка загрузки статуса:', error);
+            }
+        }
+
+        // Обновление статуса на странице
+        function updateStatus(data) {
+            // Telegram статус
+            const telegramStatus = document.getElementById('telegramStatus');
+            const telegramStatusText = document.getElementById('telegramStatusText');
+            
+            if (data.telegram_connected) {
+                telegramStatus.className = 'telegram-status telegram-connected';
+                telegramStatusText.textContent = 'Подключен';
+            } else {
+                telegramStatus.className = 'telegram-status telegram-disconnected';
+                telegramStatusText.textContent = 'Отключен';
+            }
+            
+            // Статистика
+            document.getElementById('groupsCount').textContent = data.groups_count;
+            document.getElementById('interval').textContent = data.interval;
+            
+            // Обновляем поля ввода интервала только если они пустые
+            const intervalInput = document.getElementById('intervalInput');
+            const intervalUnit = document.getElementById('intervalUnit');
+            if (intervalInput && (!intervalInput.value || intervalInput.value === '24')) {
+                const intervalMinutes = data.interval_minutes || 1440;
+                if (intervalMinutes < 60) {
+                    intervalInput.value = intervalMinutes;
+                    intervalUnit.value = 'minutes';
+                } else {
+                    const hours = Math.floor(intervalMinutes / 60);
+                    intervalInput.value = hours;
+                    intervalUnit.value = 'hours';
+                }
+            }
+            
+            // Планировщик
+            const schedulerStatus = document.getElementById('schedulerStatus');
+            schedulerStatus.textContent = data.scheduler_status;
+            schedulerStatus.className = 'badge ' + (data.scheduler_status === 'Запущен' ? 'bg-success' : 'bg-secondary');
+            
+            // Следующая публикация
+            document.getElementById('nextRun').textContent = data.next_run;
+            
+            // Статус публикации
+            updatePublicationStatus(data.publication_status);
+        }
+        
+        // Обновление статуса публикации
+        function updatePublicationStatus(publicationStatus) {
+            if (!publicationStatus) {
+                document.getElementById('publicationStatus').textContent = 'Неактивно';
+                document.getElementById('publicationStatus').className = 'badge bg-secondary';
+                document.getElementById('publicationStatusPanel').style.display = 'none';
+                return;
+            }
+            
+            const statusElement = document.getElementById('publicationStatus');
+            const panel = document.getElementById('publicationStatusPanel');
+            
+            if (publicationStatus.is_publishing) {
+                statusElement.textContent = 'Публикация';
+                statusElement.className = 'badge bg-warning';
+                panel.style.display = 'block';
+                
+                // Обновляем детальную информацию
+                document.getElementById('currentStep').textContent = publicationStatus.current_step || '-';
+                
+                // Прогресс
+                const progressBar = document.getElementById('progressBar');
+                const progressText = document.getElementById('progressText');
+                const progressPercent = publicationStatus.progress_percent || 0;
+                
+                progressBar.style.width = progressPercent + '%';
+                progressBar.className = 'progress-bar ' + (progressPercent === 100 ? 'bg-success' : 'bg-primary');
+                
+                const completed = publicationStatus.completed_groups || 0;
+                const total = publicationStatus.total_groups || 0;
+                progressText.textContent = `${progressPercent}% (${completed}/${total})`;
+                
+                // Время
+                document.getElementById('startTime').textContent = publicationStatus.start_time_str || '-';
+                document.getElementById('lastUpdate').textContent = publicationStatus.last_update_str || '-';
+                
+                // Ошибки
+                const errorsSection = document.getElementById('errorsSection');
+                const errorsList = document.getElementById('errorsList');
+                
+                if (publicationStatus.errors && publicationStatus.errors.length > 0) {
+                    errorsSection.style.display = 'block';
+                    errorsList.innerHTML = '';
+                    
+                    publicationStatus.errors.forEach(error => {
+                        const errorItem = document.createElement('div');
+                        errorItem.className = 'list-group-item list-group-item-danger';
+                        errorItem.innerHTML = `
+                            <div class="d-flex w-100 justify-content-between">
+                                <h6 class="mb-1">${error.group}</h6>
+                                <small>${error.time ? new Date(error.time).toLocaleTimeString() : ''}</small>
+                            </div>
+                            <p class="mb-1">${error.error}</p>
+                        `;
+                        errorsList.appendChild(errorItem);
+                    });
+                } else {
+                    errorsSection.style.display = 'none';
+                }
+                
+            } else {
+                statusElement.textContent = 'Ожидание';
+                statusElement.className = 'badge bg-success';
+                panel.style.display = 'none';
+            }
+        }
+
+        // Загрузка списка групп
+        async function loadGroups() {
+            try {
+                const response = await fetch('/api/groups');
+                const data = await response.json();
+                
+                if (response.ok) {
+                    updateGroupsList(data);
+                } else {
+                    console.error('Ошибка загрузки групп:', data.error);
+                }
+            } catch (error) {
+                console.error('Ошибка загрузки групп:', error);
+            }
+        }
+
+        // Обновление списка групп
+        function updateGroupsList(groups) {
+            const groupsList = document.getElementById('groupsList');
+            
+            if (groups.length === 0) {
+                groupsList.innerHTML = '<div class="text-center text-muted">Нет добавленных групп</div>';
+                return;
+            }
+            
+            let html = '';
+            groups.forEach(group => {
+                html += `
+                    <div class="group-item p-3 mb-2 border rounded">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <div>
+                                <h6 class="mb-1">${group.title}</h6>
+                                <small class="text-muted">ID: ${group.id}</small>
+                                <br>
+                                <small class="text-muted">Последняя публикация: ${group.last_post}</small>
+                            </div>
+                            <button class="btn btn-outline-danger btn-sm" onclick="removeGroup('${group.id}')">
+                                <i class="fas fa-trash"></i>
+                            </button>
+                        </div>
+                    </div>
+                `;
+            });
+            
+            groupsList.innerHTML = html;
+        }
+
+        // Настройка обработчиков событий
+        function setupEventListeners() {
+            console.log('Настройка обработчиков событий');
+            
+            // Добавление группы
+            document.getElementById('addGroupBtn').addEventListener('click', addGroup);
+            
+            // Установка интервала
+            const setIntervalBtn = document.getElementById('setIntervalBtn');
+            console.log('setIntervalBtn найден:', setIntervalBtn);
+            if (setIntervalBtn) {
+                setIntervalBtn.addEventListener('click', function() {
+                    console.log('=== Кнопка установить нажата ===');
+                    setIntervalValue();
+                });
+                console.log('Обработчик события добавлен для setIntervalBtn');
+            } else {
+                console.error('setIntervalBtn не найден!');
+            }
+            
+            // Быстрые действия
+            document.getElementById('postNowBtn').addEventListener('click', postNow);
+            document.getElementById('startSchedulerBtn').addEventListener('click', startScheduler);
+            document.getElementById('stopSchedulerBtn').addEventListener('click', stopScheduler);
+            document.getElementById('reloadPostBtn').addEventListener('click', reloadPost);
+        }
+
+        // Добавление группы
+        async function addGroup() {
+            const groupInput = document.getElementById('groupInput');
+            const addBtn = document.getElementById('addGroupBtn');
+            
+            if (!groupInput.value.trim()) {
+                showToast('Введите ссылку, @username или ID группы', 'warning');
+                return;
+            }
+            
+            setButtonLoading(addBtn, true);
+            
+            try {
+                const response = await fetch('/api/groups', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        group_input: groupInput.value.trim()
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok) {
+                    showToast(data.message, 'success');
+                    groupInput.value = '';
+                    loadGroups();
+                    loadStatus();
+                } else {
+                    showToast(data.error, 'error');
+                }
+            } catch (error) {
+                showToast('Ошибка добавления группы', 'error');
+            } finally {
+                setButtonLoading(addBtn, false);
+            }
+        }
+
+        // Удаление группы
+        async function removeGroup(chatId) {
+            if (!confirm('Удалить эту группу?')) {
+                return;
+            }
+            
+            try {
+                const response = await fetch(`/api/groups/${chatId}`, {
+                    method: 'DELETE'
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok) {
+                    showToast(data.message, 'success');
+                    loadGroups();
+                    loadStatus();
+                } else {
+                    showToast(data.error, 'error');
+                }
+            } catch (error) {
+                showToast('Ошибка удаления группы', 'error');
+            }
+        }
+
+        // Установка интервала
+        async function setIntervalValue() {
+            console.log('=== setIntervalValue вызвана ===');
+            const intervalInput = document.getElementById('intervalInput');
+            const intervalUnit = document.getElementById('intervalUnit');
+            const setBtn = document.getElementById('setIntervalBtn');
+            
+            console.log('intervalInput элемент:', intervalInput);
+            console.log('intervalInput.value:', intervalInput.value);
+            console.log('intervalUnit.value:', intervalUnit.value);
+            
+            const value = parseInt(intervalInput.value);
+            const unit = intervalUnit.value;
+            
+            if (!value || value <= 0) {
+                console.log('Ошибка валидации: неверный интервал');
+                showToast('Введите корректный интервал (больше 0)', 'warning');
+                return;
+            }
+            
+            // Дополнительная валидация
+            if (value > 10080) {
+                console.log('Ошибка валидации: интервал слишком большой');
+                showToast('Максимальный интервал: 10080 минут (7 дней)', 'warning');
+                return;
+            }
+            
+            // Конвертируем в минуты
+            let minutes;
+            if (unit === 'hours') {
+                minutes = value * 60;
+                console.log(`Конвертируем ${value} часов в ${minutes} минут`);
+            } else if (unit === 'minutes') {
+                minutes = value;
+                console.log(`Используем ${value} минут`);
+            } else {
+                console.log('Неизвестная единица измерения:', unit);
+                showToast('Неизвестная единица измерения', 'error');
+                return;
+            }
+            
+            console.log('Устанавливаем интервал:', minutes, 'минут');
+            
+            setButtonLoading(setBtn, true);
+            
+            try {
+                const response = await fetch('/api/interval', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        minutes: minutes
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok) {
+                    showToast(data.message, 'success');
+                    // Обновляем отображаемое значение интервала
+                    document.getElementById('interval').textContent = data.interval || minutes;
+                    loadStatus();
+                } else {
+                    showToast(data.error, 'error');
+                }
+            } catch (error) {
+                showToast('Ошибка установки интервала', 'error');
+            } finally {
+                setButtonLoading(setBtn, false);
+            }
+        }
+
+        // Публикация сейчас
+        async function postNow() {
+            const btn = document.getElementById('postNowBtn');
+            setButtonLoading(btn, true);
+            
+            try {
+                const response = await fetch('/api/post_now', {
+                    method: 'POST'
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok) {
+                    showToast(data.message, 'success');
+                } else {
+                    showToast(data.error, 'error');
+                }
+            } catch (error) {
+                showToast('Ошибка публикации', 'error');
+            } finally {
+                setButtonLoading(btn, false);
+            }
+        }
+
+        // Запуск планировщика
+        async function startScheduler() {
+            const btn = document.getElementById('startSchedulerBtn');
+            setButtonLoading(btn, true);
+            
+            try {
+                const response = await fetch('/api/scheduler/start', {
+                    method: 'POST'
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok) {
+                    showToast(data.message, 'success');
+                    loadStatus();
+                } else {
+                    showToast(data.error, 'error');
+                }
+            } catch (error) {
+                showToast('Ошибка запуска планировщика', 'error');
+            } finally {
+                setButtonLoading(btn, false);
+            }
+        }
+
+        // Остановка планировщика
+        async function stopScheduler() {
+            const btn = document.getElementById('stopSchedulerBtn');
+            setButtonLoading(btn, true);
+            
+            try {
+                const response = await fetch('/api/scheduler/stop', {
+                    method: 'POST'
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok) {
+                    showToast(data.message, 'success');
+                    loadStatus();
+                } else {
+                    showToast(data.error, 'error');
+                }
+            } catch (error) {
+                showToast('Ошибка остановки планировщика', 'error');
+            } finally {
+                setButtonLoading(btn, false);
+            }
+        }
+
+        // Перезагрузка поста
+        async function reloadPost() {
+            const btn = document.getElementById('reloadPostBtn');
+            setButtonLoading(btn, true);
+            
+            try {
+                const response = await fetch('/api/reload_post', {
+                    method: 'POST'
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok) {
+                    showToast(data.message, 'success');
+                } else {
+                    showToast(data.error, 'error');
+                }
+            } catch (error) {
+                showToast('Ошибка перезагрузки поста', 'error');
+            } finally {
+                setButtonLoading(btn, false);
+            }
+        }
+
+        // Утилиты
+        function setButtonLoading(button, loading) {
+            console.log('setButtonLoading вызвана:', button, loading);
+            
+            if (loading) {
+                button.disabled = true;
+                // Сохраняем оригинальный текст
+                if (!button.getAttribute('data-original-text')) {
+                    button.setAttribute('data-original-text', button.textContent);
+                }
+                button.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Загрузка...';
+                console.log('Кнопка переведена в состояние загрузки');
+            } else {
+                button.disabled = false;
+                // Восстанавливаем оригинальный текст
+                const originalText = button.getAttribute('data-original-text') || 'Установить';
+                button.textContent = originalText;
+                console.log('Кнопка возвращена в нормальное состояние');
+            }
+        }
+
+        function showToast(message, type = 'info') {
+            const toast = document.getElementById('toast');
+            const toastBody = document.getElementById('toastBody');
+            const toastHeader = toast.querySelector('.toast-header i');
+            
+            toastBody.textContent = message;
+            
+            // Устанавливаем цвет иконки
+            toastHeader.className = 'fas me-2';
+            switch (type) {
+                case 'success':
+                    toastHeader.classList.add('fa-check-circle', 'text-success');
+                    break;
+                case 'error':
+                    toastHeader.classList.add('fa-exclamation-circle', 'text-danger');
+                    break;
+                case 'warning':
+                    toastHeader.classList.add('fa-exclamation-triangle', 'text-warning');
+                    break;
+                default:
+                    toastHeader.classList.add('fa-info-circle', 'text-primary');
+            }
+            
+            const bsToast = new bootstrap.Toast(toast);
+            bsToast.show();
+        }
+    </script>
+</body>
+</html>

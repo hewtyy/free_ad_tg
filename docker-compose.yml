@@ -1,0 +1,41 @@
+
+services:
+  telegram-bot:
+    build: .
+    container_name: telegram-ad-bot
+    restart: unless-stopped
+    environment:
+      - API_ID=${API_ID}
+      - API_HASH=${API_HASH}
+      - PHONE_NUMBER=${PHONE_NUMBER}
+      - ADMIN_ID=${ADMIN_ID}
+    ports:
+      - "8080:5000"  # Веб-интерфейс
+    volumes:
+      # Монтируем директорию с данными для сохранения базы данных и логов
+      - ./bot/data:/app/bot/data
+      - ./logs:/app/logs
+    env_file:
+      - .env
+    # Ограничиваем ресурсы
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: '0.5'
+        reservations:
+          memory: 256M
+          cpus: '0.25'
+    # Настройки логирования
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    # Проверка здоровья контейнера
+    healthcheck:
+      test: ["CMD", "python", "-c", "import os; exit(0 if os.path.exists('/app/bot/data/session.session') else 1)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s

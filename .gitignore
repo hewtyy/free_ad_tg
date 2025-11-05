@@ -1,0 +1,59 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+dist/
+build/
+
+# Virtual environments
+venv/
+env/
+ENV/
+test_env/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Environment variables
+.env
+.env.local
+
+# Logs
+logs/
+*.log
+
+# Database
+*.db
+*.db-journal
+*.db-shm
+*.db-wal
+
+# Telegram sessions (keep structure but ignore content)
+bot/data/*.session
+bot/data/*.session-journal
+
+# User data (keep structure but ignore content)
+bot/data/database.db
+bot/data/image.jpg
+bot/data/post.txt
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Temporary files
+*.tmp
+*.bak
+*.swp
+*~
+
+# Test files
+test_*.py
+*_test.py
