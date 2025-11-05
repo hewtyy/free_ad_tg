@@ -44,10 +44,13 @@ async def on_startup():
         logger.error("Не удалось авторизоваться в Telegram")
         return False
     
-    # Создаем и запускаем планировщик
+    # Создаем планировщик (не запускаем автоматически)
     scheduler = PostScheduler()
-    await scheduler.start()
-
+    
+    # Передаем планировщик в веб-сервер
+    from web_server import set_scheduler
+    set_scheduler(scheduler)
+    
     # Запускаем веб-сервер в отдельном потоке
     web_thread = threading.Thread(
         target=run_web_server,

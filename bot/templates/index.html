@@ -5,60 +5,953 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Система публикации постов</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <style>
-        .status-card {
-            transition: all 0.3s ease;
+        :root {
+            --primary-color: #6366f1;
+            --primary-dark: #4f46e5;
+            --success-color: #10b981;
+            --warning-color: #f59e0b;
+            --danger-color: #ef4444;
+            --info-color: #06b6d4;
+            --bg-gradient: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            --bg-gradient-light: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+            --card-shadow: 0 10px 25px rgba(0,0,0,0.1);
+            --card-shadow-hover: 0 15px 35px rgba(0,0,0,0.15);
+            --text-primary: #1e293b;
+            --text-secondary: #64748b;
+            --border-color: #e2e8f0;
+            --bg-color: #ffffff;
+            --bg-secondary: #f8fafc;
         }
-        .status-card:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+
+        /* Темная тема */
+        [data-theme="dark"] {
+            --bg-gradient-light: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+            --text-primary: #f8fafc;
+            --text-secondary: #cbd5e1;
+            --border-color: #475569;
+            --bg-color: #1e293b;
+            --bg-secondary: #0f172a;
+            --card-shadow: 0 10px 25px rgba(0,0,0,0.5);
+            --card-shadow-hover: 0 15px 35px rgba(0,0,0,0.6);
         }
-        .telegram-status {
+
+        [data-theme="dark"] body {
+            background: var(--bg-gradient-light);
+        }
+
+        [data-theme="dark"] body::before {
+            opacity: 0.15;
+        }
+
+        [data-theme="dark"] .card,
+        [data-theme="dark"] .status-card {
+            background: #1e293b;
+            color: var(--text-primary);
+            border: 1px solid #334155;
+        }
+
+        [data-theme="dark"] .card-header {
+            border-bottom: 1px solid #334155;
+            background: #1e293b;
+        }
+
+        [data-theme="dark"] .group-item {
+            background: #1e293b;
+            border-left-color: var(--primary-color);
+            border: 1px solid #334155;
+        }
+
+        [data-theme="dark"] .group-item:hover {
+            background: #334155;
+            border-color: var(--primary-color);
+        }
+
+        [data-theme="dark"] .form-control,
+        [data-theme="dark"] .form-select {
+            background: #334155;
+            border-color: #475569;
+            color: var(--text-primary);
+        }
+
+        [data-theme="dark"] .form-control:focus,
+        [data-theme="dark"] .form-select:focus {
+            background: #475569;
+            border-color: var(--primary-color);
+            color: var(--text-primary);
+        }
+
+        [data-theme="dark"] .form-control::placeholder {
+            color: #94a3b8;
+        }
+
+        [data-theme="dark"] .empty-state {
+            color: var(--text-secondary);
+        }
+
+        [data-theme="dark"] .empty-state i {
+            color: var(--text-secondary);
+            opacity: 0.6;
+        }
+
+        [data-theme="dark"] .list-group-item-danger {
+            background: #7f1d1d;
+            border-color: #991b1b;
+        }
+
+        [data-theme="dark"] .toast {
+            background: #1e293b;
+            color: var(--text-primary);
+            border: 1px solid #334155;
+        }
+
+        [data-theme="dark"] .toast-body {
+            background: #1e293b;
+            color: var(--text-primary);
+        }
+
+        [data-theme="dark"] .navbar {
+            background: var(--bg-gradient) !important;
+        }
+
+        [data-theme="dark"] .badge {
+            box-shadow: 0 2px 8px rgba(0,0,0,0.4);
+        }
+
+        [data-theme="dark"] .text-muted {
+            color: var(--text-secondary) !important;
+        }
+
+        [data-theme="dark"] .status-card h5 {
+            color: var(--text-secondary);
+        }
+
+        [data-theme="dark"] .status-card h3 {
+            color: var(--text-primary);
+        }
+
+        [data-theme="dark"] .status-card small {
+            color: var(--text-secondary);
+        }
+
+        [data-theme="dark"] .btn-outline-primary {
+            border-color: var(--primary-color);
+            color: var(--primary-color);
+        }
+
+        [data-theme="dark"] .btn-outline-primary:hover {
+            background: var(--primary-color);
+            color: white;
+        }
+
+        [data-theme="dark"] .btn-outline-danger {
+            border-color: var(--danger-color);
+            color: var(--danger-color);
+        }
+
+        [data-theme="dark"] .btn-outline-danger:hover {
+            background: var(--danger-color);
+            color: white;
+        }
+
+        [data-theme="dark"] .progress {
+            background: #334155;
+        }
+
+        [data-theme="dark"] .card-body {
+            color: var(--text-primary);
+        }
+
+        [data-theme="dark"] .card-body h6 {
+            color: var(--text-primary);
+        }
+
+        [data-theme="dark"] .card-body p {
+            color: var(--text-primary);
+        }
+
+        [data-theme="dark"] .group-item h6 {
+            color: var(--text-primary);
+        }
+
+        [data-theme="dark"] .group-item small {
+            color: var(--text-secondary);
+        }
+
+        /* Переключатель темы */
+        .theme-switcher {
+            position: relative;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            margin: 0 10px;
+        }
+
+        .theme-switcher-toggle {
+            position: relative;
             display: inline-block;
-            width: 12px;
-            height: 12px;
+            width: 50px;
+            height: 26px;
+        }
+
+        .theme-switcher input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+
+        .theme-switcher-slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: rgba(255, 255, 255, 0.3);
+            transition: 0.4s;
+            border-radius: 26px;
+        }
+
+        .theme-switcher-slider:before {
+            position: absolute;
+            content: "";
+            height: 20px;
+            width: 20px;
+            left: 3px;
+            bottom: 3px;
+            background-color: white;
+            transition: 0.4s;
             border-radius: 50%;
-            margin-right: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
         }
-        .telegram-connected {
-            background-color: #28a745;
+
+        input:checked + .theme-switcher-slider {
+            background-color: rgba(255, 255, 255, 0.5);
         }
-        .telegram-disconnected {
-            background-color: #dc3545;
+
+        input:checked + .theme-switcher-slider:before {
+            transform: translateX(24px);
         }
-        .group-item {
-            border-left: 4px solid #007bff;
+
+        .theme-icon {
+            font-size: 1.1rem;
+            opacity: 0.8;
+        }
+
+        /* Переключатель языка */
+        .language-switcher {
+            display: inline-flex;
+            gap: 5px;
+            margin-left: 10px;
+        }
+
+        .language-switcher button {
+            padding: 4px 10px;
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            background: transparent;
+            color: white;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 0.875rem;
+            font-weight: 600;
             transition: all 0.3s ease;
         }
-        .group-item:hover {
-            border-left-color: #0056b3;
-            background-color: #f8f9fa;
+
+        .language-switcher button:hover {
+            background: rgba(255, 255, 255, 0.2);
         }
-        .loading {
-            display: none;
+
+        .language-switcher button.active {
+            background: rgba(255, 255, 255, 0.3);
+            border-color: rgba(255, 255, 255, 0.5);
         }
-        .btn-loading {
+
+        [data-theme="dark"] .language-switcher button {
+            border-color: rgba(255, 255, 255, 0.2);
+        }
+
+        [data-theme="dark"] .language-switcher button.active {
+            background: rgba(255, 255, 255, 0.2);
+        }
+
+        * {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+        }
+
+        body {
+            background: var(--bg-gradient-light);
+            min-height: 100vh;
+            padding-bottom: 2rem;
             position: relative;
         }
-        .btn-loading .spinner-border {
+
+        body::before {
+            content: '';
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 400px;
+            background: var(--bg-gradient);
+            opacity: 0.05;
+            z-index: 0;
+            pointer-events: none;
+        }
+
+        .container {
+            position: relative;
+            z-index: 1;
+        }
+
+        /* Навигация */
+        .navbar {
+            background: var(--bg-gradient) !important;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            padding: 1rem 0;
+        }
+
+        .navbar-brand {
+            font-weight: 700;
+            font-size: 1.5rem;
+            letter-spacing: -0.5px;
+        }
+
+        .navbar-text {
+            font-weight: 500;
+            font-size: 0.95rem;
+        }
+
+        /* Карточки статуса */
+        .status-card {
+            border: none;
+            border-radius: 16px;
+            box-shadow: var(--card-shadow);
+            transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            overflow: hidden;
+            position: relative;
+            background: white;
+            height: 100%;
+        }
+
+        .status-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 4px;
+            background: var(--bg-gradient);
+            transform: scaleX(0);
+            transition: transform 0.3s ease;
+        }
+
+        .status-card:hover {
+            transform: translateY(-8px);
+            box-shadow: var(--card-shadow-hover);
+        }
+
+        .status-card:hover::before {
+            transform: scaleX(1);
+        }
+
+        .status-card .card-body {
+            padding: 1.75rem;
+        }
+
+        /* Улучшенные карточки статуса - разные цвета для разных типов */
+        .status-card:nth-child(1) i {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .status-card:nth-child(2) i {
+            background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .status-card:nth-child(3) i {
+            background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .status-card:nth-child(4) i {
+            background: linear-gradient(135deg, #06b6d4 0%, #0891b2 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .status-card i {
+            font-size: 2.5rem;
+            margin-bottom: 1rem;
+        }
+
+        .status-card h5 {
+            font-weight: 600;
+            color: var(--text-secondary);
+            font-size: 0.875rem;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 0.75rem;
+        }
+
+        .status-card h3 {
+            font-weight: 700;
+            font-size: 2.25rem;
+            margin: 0;
+            background: var(--bg-gradient);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            line-height: 1.2;
+        }
+
+        /* Разные цвета для разных статусов */
+        .status-card:nth-child(1) h3 {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .status-card:nth-child(2) h3 {
+            background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        /* Улучшенные бейджи в карточках статуса */
+        .status-card .badge {
+            font-size: 0.875rem;
+            padding: 0.5rem 1rem;
+            margin-top: 0.5rem;
+            display: inline-block;
+        }
+
+        .status-card small {
+            display: block;
+            color: var(--text-secondary);
+            font-size: 0.75rem;
+            margin-top: 0.5rem;
+            font-weight: 500;
+        }
+
+        /* Статус Telegram */
+        .telegram-status {
+            display: inline-block;
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            margin-right: 8px;
+            box-shadow: 0 0 8px currentColor;
+            animation: pulse 2s infinite;
+        }
+
+        .telegram-connected {
+            background-color: var(--success-color);
+            color: var(--success-color);
+        }
+
+        .telegram-disconnected {
+            background-color: var(--danger-color);
+            color: var(--danger-color);
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        /* Карточки действий */
+        .card {
+            border: none;
+            border-radius: 16px;
+            box-shadow: var(--card-shadow);
+            transition: all 0.3s ease;
+            margin-bottom: 1.5rem;
+            background: white;
+            overflow: hidden;
+        }
+
+        .card:hover {
+            box-shadow: var(--card-shadow-hover);
+            transform: translateY(-2px);
+        }
+
+        .card-header {
+            background: var(--bg-gradient);
+            color: white;
+            border: none;
+            padding: 1.25rem 1.5rem;
+            font-weight: 600;
+            border-radius: 16px 16px 0 0 !important;
+            position: relative;
+        }
+
+        .card-header::after {
+            content: '';
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            height: 1px;
+            background: rgba(255, 255, 255, 0.2);
+        }
+
+        .card-header h5 {
+            margin: 0;
+            font-weight: 600;
+            font-size: 1.1rem;
+            display: flex;
+            align-items: center;
+        }
+
+        .card-header i {
+            margin-right: 0.5rem;
+            opacity: 0.9;
+        }
+
+        .card-body {
+            padding: 1.5rem;
+        }
+
+        /* Кнопки */
+        .btn {
+            border-radius: 10px;
+            font-weight: 500;
+            padding: 0.625rem 1.25rem;
+            transition: all 0.3s ease;
+            border: none;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .btn::before {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 0;
+            height: 0;
+            border-radius: 50%;
+            background: rgba(255, 255, 255, 0.3);
+            transform: translate(-50%, -50%);
+            transition: width 0.6s, height 0.6s;
+        }
+
+        .btn:hover::before {
+            width: 300px;
+            height: 300px;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, var(--primary-color) 0%, var(--primary-dark) 100%);
+            box-shadow: 0 4px 15px rgba(99, 102, 241, 0.4);
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(99, 102, 241, 0.6);
+        }
+
+        .btn-success {
+            background: linear-gradient(135deg, var(--success-color) 0%, #059669 100%);
+            box-shadow: 0 4px 15px rgba(16, 185, 129, 0.4);
+        }
+
+        .btn-success:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(16, 185, 129, 0.6);
+        }
+
+        .btn-warning {
+            background: linear-gradient(135deg, var(--warning-color) 0%, #d97706 100%);
+            box-shadow: 0 4px 15px rgba(245, 158, 11, 0.4);
+        }
+
+        .btn-warning:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(245, 158, 11, 0.6);
+        }
+
+        .btn-danger {
+            background: linear-gradient(135deg, var(--danger-color) 0%, #dc2626 100%);
+            box-shadow: 0 4px 15px rgba(239, 68, 68, 0.4);
+        }
+
+        .btn-info {
+            background: linear-gradient(135deg, var(--info-color) 0%, #0891b2 100%);
+            box-shadow: 0 4px 15px rgba(6, 182, 212, 0.4);
+        }
+
+        .btn-outline-primary {
+            border: 2px solid var(--primary-color);
+            color: var(--primary-color);
+            background: transparent;
+        }
+
+        .btn-outline-primary:hover {
+            background: var(--primary-color);
+            color: white;
+            transform: translateY(-2px);
+        }
+
+        .btn-outline-danger {
+            border: 2px solid var(--danger-color);
+            color: var(--danger-color);
+            background: transparent;
+        }
+
+        .btn-outline-danger:hover {
+            background: var(--danger-color);
+            color: white;
+            transform: translateY(-2px);
+        }
+
+        /* Бейджи */
+        .badge {
+            padding: 0.5rem 1.25rem;
+            border-radius: 20px;
+            font-weight: 600;
+            font-size: 0.875rem;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+        }
+
+        .badge.bg-success {
+            background: linear-gradient(135deg, var(--success-color) 0%, #059669 100%) !important;
+        }
+
+        .badge.bg-warning {
+            background: linear-gradient(135deg, var(--warning-color) 0%, #d97706 100%) !important;
+        }
+
+        .badge.bg-secondary {
+            background: linear-gradient(135deg, #64748b 0%, #475569 100%) !important;
+        }
+
+        .badge.bg-primary {
+            background: var(--bg-gradient) !important;
+        }
+
+        /* Группы */
+        .group-item {
+            border-left: 4px solid var(--primary-color);
+            border-radius: 12px;
+            transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            background: white;
+            margin-bottom: 0.75rem;
+            padding: 1.25rem;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .group-item::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 4px;
+            height: 100%;
+            background: var(--bg-gradient);
+            transform: scaleY(0);
+            transition: transform 0.3s ease;
+        }
+
+        .group-item:hover {
+            border-left-color: var(--primary-dark);
+            background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+            transform: translateX(4px);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+        }
+
+        .group-item:hover::before {
+            transform: scaleY(1);
+        }
+
+        .group-item h6 {
+            font-weight: 600;
+            color: var(--text-primary);
+            margin-bottom: 0.75rem;
+            display: flex;
+            align-items: center;
+        }
+
+        .group-item h6 i {
+            margin-right: 0.5rem;
+        }
+
+        /* Прогресс-бар */
+        .progress {
+            height: 12px;
+            border-radius: 10px;
+            background: #e2e8f0;
+            overflow: hidden;
+            box-shadow: inset 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        .progress-bar {
+            border-radius: 10px;
+            transition: width 0.6s ease;
+            background: var(--bg-gradient);
+            box-shadow: 0 2px 8px rgba(99, 102, 241, 0.4);
+        }
+
+        /* Формы */
+        .form-control, .form-select {
+            border-radius: 10px;
+            border: 2px solid var(--border-color);
+            padding: 0.75rem 1rem;
+            transition: all 0.3s ease;
+            font-size: 0.95rem;
+        }
+
+        .form-control:focus, .form-select:focus {
+            border-color: var(--primary-color);
+            box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
+            outline: none;
+        }
+
+        .form-label {
+            font-weight: 600;
+            color: var(--text-primary);
+            margin-bottom: 0.75rem;
+            display: flex;
+            align-items: center;
+        }
+
+        /* Улучшенный инпут-групп */
+        .input-group {
+            box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+            border-radius: 10px;
+            overflow: hidden;
+        }
+
+        .input-group .form-control {
+            border-right: none;
+        }
+
+        .input-group .form-select {
+            border-left: none;
+            border-right: none;
+        }
+
+        .input-group .btn {
+            border-left: none;
+            border-radius: 0 10px 10px 0;
+        }
+
+        /* Улучшенный Toast */
+        .toast {
+            border-radius: 12px;
+            box-shadow: var(--card-shadow);
+            border: none;
+            min-width: 300px;
+        }
+
+        .toast-header {
+            background: var(--bg-gradient);
+            color: white;
+            border: none;
+            border-radius: 12px 12px 0 0;
+            font-weight: 600;
+        }
+
+        .toast-header .btn-close {
+            filter: invert(1);
+            opacity: 0.8;
+        }
+
+        .toast-header .btn-close:hover {
+            opacity: 1;
+        }
+
+        .toast-body {
+            padding: 1rem 1.25rem;
+            font-size: 0.95rem;
+        }
+
+        /* Улучшенная панель статуса публикации */
+        #publicationStatusPanel {
+            animation: slideDown 0.4s ease;
+        }
+
+        #publicationStatusPanel .card-header {
+            background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+        }
+
+        #publicationStatusPanel h6 {
+            font-size: 0.875rem;
+            font-weight: 600;
+            color: var(--text-primary);
+            margin-bottom: 0.5rem;
+        }
+
+        #publicationStatusPanel p {
+            font-size: 1rem;
+            color: var(--text-primary);
+            margin-bottom: 0;
+        }
+
+        @keyframes slideDown {
+            from {
+                opacity: 0;
+                transform: translateY(-20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        /* Контейнер */
+        .container {
+            max-width: 1400px;
+            position: relative;
+            z-index: 1;
+        }
+
+        /* Загрузка */
+        .spinner-border-sm {
             width: 1rem;
             height: 1rem;
-            margin-right: 0.5rem;
+            border-width: 0.15em;
+        }
+
+        /* Адаптивность */
+        @media (max-width: 768px) {
+            .status-card h3 {
+                font-size: 1.75rem;
+            }
+
+            .status-card i {
+                font-size: 2rem;
+            }
+
+            .navbar-brand {
+                font-size: 1.25rem;
+            }
+
+            .card-body {
+                padding: 1.25rem;
+            }
+
+            .group-item {
+                padding: 1rem;
+            }
+
+            .btn-group {
+                flex-direction: column;
+            }
+
+            .btn-group .btn {
+                border-radius: 10px !important;
+                margin-bottom: 0.5rem;
+            }
+        }
+
+        @media (max-width: 576px) {
+            .status-card .card-body {
+                padding: 1.25rem;
+            }
+
+            .status-card h3 {
+                font-size: 1.5rem;
+            }
+        }
+
+        /* Анимация появления */
+        .fade-in {
+            animation: fadeIn 0.5s ease;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+
+        /* Улучшенные списки */
+        .list-group-item {
+            border-radius: 10px;
+            margin-bottom: 0.5rem;
+            border: none;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+            transition: all 0.3s ease;
+        }
+
+        .list-group-item:hover {
+            transform: translateX(4px);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+        }
+
+        .list-group-item-danger {
+            border-left: 4px solid var(--danger-color);
+            background: #fef2f2;
+        }
+
+        .list-group-item-danger h6 {
+            color: var(--danger-color);
+        }
+
+        /* Пустые состояния */
+        .empty-state {
+            text-align: center;
+            padding: 3rem 1rem;
+            color: var(--text-secondary);
+        }
+
+        .empty-state i {
+            font-size: 3rem;
+            margin-bottom: 1rem;
+            opacity: 0.5;
+        }
+
+        .empty-state p {
+            font-size: 1.1rem;
+            font-weight: 500;
+            margin-bottom: 0.5rem;
+        }
+
+        .empty-state small {
+            font-size: 0.875rem;
+            opacity: 0.7;
         }
     </style>
 </head>
 <body class="bg-light">
-    <nav class="navbar navbar-dark bg-primary">
+    <nav class="navbar navbar-dark">
         <div class="container">
-            <span class="navbar-brand mb-0 h1">
-                <i class="fas fa-paper-plane me-2"></i>
-                Система публикации постов
+            <span class="navbar-brand mb-0">
+                <i class="fas fa-rocket me-2"></i>
+                <span data-i18n="app.title">Система публикации постов</span>
             </span>
-            <div class="navbar-nav">
-                <span class="navbar-text">
+            <div class="navbar-nav d-flex flex-row align-items-center">
+                <div class="language-switcher">
+                    <button onclick="setLanguage('ru')" id="lang-ru" class="active">RU</button>
+                    <button onclick="setLanguage('en')" id="lang-en">EN</button>
+                </div>
+                <div class="theme-switcher">
+                    <i class="fas fa-sun theme-icon" id="themeIcon"></i>
+                    <label class="theme-switcher-toggle">
+                        <input type="checkbox" id="themeToggle" onchange="toggleTheme()">
+                        <span class="theme-switcher-slider"></span>
+                    </label>
+                </div>
+                <span class="navbar-text ms-3">
                     <span class="telegram-status" id="telegramStatus"></span>
-                    <span id="telegramStatusText">Проверка подключения...</span>
+                    <span id="telegramStatusText" data-i18n="connection.checking">Проверка подключения...</span>
                 </span>
             </div>
         </div>
@@ -67,49 +960,39 @@
     <div class="container mt-4">
         <!-- Статус системы -->
         <div class="row mb-4">
-            <div class="col-md-3">
-                <div class="card status-card">
+            <div class="col-md-3 col-sm-6 mb-3">
+                <div class="card status-card fade-in">
                     <div class="card-body text-center">
-                        <i class="fas fa-users fa-2x text-primary mb-2"></i>
-                        <h5 class="card-title">Группы</h5>
+                        <i class="fas fa-users"></i>
+                        <h5 data-i18n="status.groups">Группы</h5>
                         <h3 class="text-primary" id="groupsCount">-</h3>
                     </div>
                 </div>
             </div>
-            <div class="col-md-3">
-                <div class="card status-card">
+            <div class="col-md-3 col-sm-6 mb-3">
+                <div class="card status-card fade-in">
                     <div class="card-body text-center">
-                        <i class="fas fa-clock fa-2x text-success mb-2"></i>
-                        <h5 class="card-title">Интервал</h5>
+                        <i class="fas fa-clock"></i>
+                        <h5 data-i18n="status.interval">Интервал</h5>
                         <h3 class="text-success" id="interval">-</h3>
-                        <small class="text-muted">часов</small>
                     </div>
                 </div>
             </div>
-            <div class="col-md-3">
-                <div class="card status-card">
+            <div class="col-md-3 col-sm-6 mb-3">
+                <div class="card status-card fade-in">
                     <div class="card-body text-center">
-                        <i class="fas fa-cogs fa-2x text-warning mb-2"></i>
-                        <h5 class="card-title">Планировщик</h5>
+                        <i class="fas fa-cogs"></i>
+                        <h5 data-i18n="status.scheduler">Планировщик</h5>
                         <span class="badge" id="schedulerStatus">-</span>
                     </div>
                 </div>
             </div>
-            <div class="col-md-3">
-                <div class="card status-card">
+            <div class="col-md-3 col-sm-6 mb-3">
+                <div class="card status-card fade-in">
                     <div class="card-body text-center">
-                        <i class="fas fa-calendar-alt fa-2x text-info mb-2"></i>
-                        <h5 class="card-title">Следующая публикация</h5>
-                        <small id="nextRun">-</small>
-                    </div>
-                </div>
-            </div>
-            <div class="col-md-3">
-                <div class="card status-card">
-                    <div class="card-body text-center">
-                        <i class="fas fa-paper-plane fa-2x text-primary mb-2"></i>
-                        <h5 class="card-title">Статус публикации</h5>
-                        <span class="badge" id="publicationStatus">-</span>
+                        <i class="fas fa-calendar-alt"></i>
+                        <h5 data-i18n="status.nextPublication">Следующая публикация</h5>
+                        <small id="nextRun" class="text-muted fw-semibold">-</small>
                     </div>
                 </div>
             </div>
@@ -118,33 +1001,34 @@
         <!-- Статус публикации -->
         <div class="row mb-4" id="publicationStatusPanel" style="display: none;">
             <div class="col-12">
-                <div class="card">
+                <div class="card fade-in">
                     <div class="card-header">
-                        <h5><i class="fas fa-tasks me-2"></i>Детальный статус публикации</h5>
+                        <h5><i class="fas fa-tasks me-2"></i><span data-i18n="publication.details">Детальный статус публикации</span></h5>
                     </div>
                     <div class="card-body">
                         <div class="row">
-                            <div class="col-md-6">
-                                <h6>Текущий этап:</h6>
-                                <p id="currentStep" class="text-muted">-</p>
+                            <div class="col-md-6 mb-3">
+                                <h6 class="fw-bold text-muted mb-2"><i class="fas fa-list-ul me-2"></i><span data-i18n="publication.currentStep">Текущий этап:</span></h6>
+                                <p id="currentStep" class="fw-semibold">-</p>
                                 
-                                <h6>Прогресс:</h6>
+                                <h6 class="fw-bold text-muted mb-2 mt-3"><i class="fas fa-chart-line me-2"></i><span data-i18n="publication.progress">Прогресс:</span></h6>
                                 <div class="progress mb-2">
                                     <div class="progress-bar" id="progressBar" role="progressbar" style="width: 0%"></div>
                                 </div>
-                                <small id="progressText" class="text-muted">0% (0/0)</small>
+                                <small id="progressText" class="text-muted fw-semibold">0% (0/0)</small>
                             </div>
-                            <div class="col-md-6">
-                                <h6>Время начала:</h6>
-                                <p id="startTime" class="text-muted">-</p>
+                            <div class="col-md-6 mb-3">
+                                <h6 class="fw-bold text-muted mb-2"><i class="fas fa-play-circle me-2"></i><span data-i18n="publication.startTime">Время начала:</span></h6>
+                                <p id="startTime" class="fw-semibold">-</p>
                                 
-                                <h6>Последнее обновление:</h6>
-                                <p id="lastUpdate" class="text-muted">-</p>
+                                <h6 class="fw-bold text-muted mb-2 mt-3"><i class="fas fa-clock me-2"></i><span data-i18n="publication.lastUpdate">Последнее обновление:</span></h6>
+                                <p id="lastUpdate" class="fw-semibold">-</p>
                             </div>
                         </div>
                         
                         <div id="errorsSection" style="display: none;">
-                            <h6 class="text-danger">Ошибки:</h6>
+                            <hr>
+                            <h6 class="fw-bold text-danger mb-3"><i class="fas fa-exclamation-triangle me-2"></i><span data-i18n="publication.errors">Ошибки:</span></h6>
                             <div id="errorsList" class="list-group"></div>
                         </div>
                     </div>
@@ -154,53 +1038,55 @@
 
         <!-- Управление -->
         <div class="row mb-4">
-            <div class="col-md-6">
-                <div class="card">
+            <div class="col-md-6 mb-3">
+                <div class="card fade-in">
                     <div class="card-header">
-                        <h5><i class="fas fa-play-circle me-2"></i>Быстрые действия</h5>
+                        <h5><i class="fas fa-bolt me-2"></i><span data-i18n="actions.quick">Быстрые действия</span></h5>
                     </div>
                     <div class="card-body">
                         <div class="d-grid gap-2">
                             <button class="btn btn-success btn-loading" id="postNowBtn">
-                                <span class="loading spinner-border spinner-border-sm" role="status"></span>
-                                <i class="fas fa-paper-plane me-2"></i>Опубликовать сейчас
+                                <i class="fas fa-paper-plane me-2"></i><span data-i18n="actions.publishNow">Опубликовать сейчас</span>
                             </button>
                             <div class="btn-group" role="group">
                                 <button class="btn btn-primary btn-loading" id="startSchedulerBtn">
-                                    <span class="loading spinner-border spinner-border-sm" role="status"></span>
-                                    <i class="fas fa-play me-2"></i>Запустить
+                                    <i class="fas fa-play me-2"></i><span data-i18n="actions.startScheduler">Запустить планировщик</span>
                                 </button>
                                 <button class="btn btn-warning btn-loading" id="stopSchedulerBtn">
-                                    <span class="loading spinner-border spinner-border-sm" role="status"></span>
-                                    <i class="fas fa-stop me-2"></i>Остановить
+                                    <i class="fas fa-stop me-2"></i><span data-i18n="actions.stop">Остановить</span>
                                 </button>
                             </div>
                             <button class="btn btn-info btn-loading" id="reloadPostBtn">
-                                <span class="loading spinner-border spinner-border-sm" role="status"></span>
-                                <i class="fas fa-sync me-2"></i>Перезагрузить пост
+                                <i class="fas fa-sync me-2"></i><span data-i18n="actions.reloadPost">Перезагрузить пост</span>
                             </button>
                         </div>
                     </div>
                 </div>
             </div>
-            <div class="col-md-6">
-                <div class="card">
+            <div class="col-md-6 mb-3">
+                <div class="card fade-in">
                     <div class="card-header">
-                        <h5><i class="fas fa-cog me-2"></i>Настройки</h5>
+                        <h5><i class="fas fa-sliders-h me-2"></i><span data-i18n="settings.title">Настройки</span></h5>
                     </div>
                     <div class="card-body">
                         <div class="mb-3">
-                            <label for="intervalInput" class="form-label">Интервал публикации</label>
+                            <label for="intervalInput" class="form-label fw-semibold">
+                                <i class="fas fa-clock me-2"></i><span data-i18n="settings.interval">Интервал публикации</span>
+                            </label>
                             <div class="input-group">
                                 <input type="number" class="form-control" id="intervalInput" min="1" max="10080" value="24" placeholder="Введите число">
-                                <select class="form-select" id="intervalUnit" style="max-width: 100px;">
+                                <select class="form-select" id="intervalUnit" style="max-width: 120px;">
                                     <option value="minutes">мин</option>
                                     <option value="hours" selected>часов</option>
                                 </select>
-                                <button class="btn btn-outline-primary" id="setIntervalBtn">Установить</button>
+                                <button class="btn btn-primary" id="setIntervalBtn">
+                                    <i class="fas fa-check me-2"></i><span data-i18n="settings.set">Установить</span>
+                                </button>
                             </div>
-                            <small class="form-text text-muted">Максимум: 10080 минут (7 дней)</small>
-                            <small class="form-text text-muted">Минимум: 1 минута. Для тестирования можно установить 1-5 минут.</small>
+                            <small class="form-text text-muted d-block mt-2">
+                                <i class="fas fa-info-circle me-1"></i>
+                                <span data-i18n="settings.maxMinutes">Максимум: 10080 минут (7 дней). Минимум: 1 минута.</span>
+                            </small>
                         </div>
                     </div>
                 </div>
@@ -209,33 +1095,35 @@
 
         <!-- Управление группами -->
         <div class="row">
-            <div class="col-md-6">
-                <div class="card">
+            <div class="col-md-6 mb-3">
+                <div class="card fade-in">
                     <div class="card-header">
-                        <h5><i class="fas fa-plus-circle me-2"></i>Добавить группу/канал</h5>
+                        <h5><i class="fas fa-plus-circle me-2"></i><span data-i18n="groups.add">Добавить группу/канал</span></h5>
                     </div>
                     <div class="card-body">
                         <div class="mb-3">
-                            <label for="groupInput" class="form-label">Ссылка, @username или ID</label>
+                            <label for="groupInput" class="form-label fw-semibold">
+                                <i class="fas fa-link me-2"></i><span data-i18n="groups.input">Ссылка, @username или ID</span>
+                            </label>
                             <input type="text" class="form-control" id="groupInput" 
                                    placeholder="@group_name, -1001234567890, https://t.me/group_name">
                         </div>
-                        <button class="btn btn-primary btn-loading" id="addGroupBtn">
-                            <span class="loading spinner-border spinner-border-sm" role="status"></span>
-                            <i class="fas fa-plus me-2"></i>Добавить
+                        <button class="btn btn-primary btn-loading w-100" id="addGroupBtn">
+                            <i class="fas fa-plus me-2"></i><span data-i18n="groups.addButton">Добавить группу</span>
                         </button>
                     </div>
                 </div>
             </div>
-            <div class="col-md-6">
-                <div class="card">
+            <div class="col-md-6 mb-3">
+                <div class="card fade-in">
                     <div class="card-header">
-                        <h5><i class="fas fa-list me-2"></i>Список групп/каналов</h5>
+                        <h5><i class="fas fa-list me-2"></i><span data-i18n="groups.list">Список групп/каналов</span></h5>
                     </div>
                     <div class="card-body">
                         <div id="groupsList">
-                            <div class="text-center text-muted">
-                                <i class="fas fa-spinner fa-spin"></i> Загрузка...
+                            <div class="empty-state">
+                                <i class="fas fa-spinner fa-spin"></i>
+                                <p data-i18n="groups.loading">Загрузка групп...</p>
                             </div>
                         </div>
                     </div>
@@ -246,11 +1134,11 @@
 
     <!-- Toast для уведомлений -->
     <div class="toast-container position-fixed bottom-0 end-0 p-3">
-        <div id="toast" class="toast" role="alert">
+        <div id="toast" class="toast" role="alert" aria-live="assertive" aria-atomic="true">
             <div class="toast-header">
-                <i class="fas fa-info-circle text-primary me-2"></i>
-                <strong class="me-auto">Уведомление</strong>
-                <button type="button" class="btn-close" data-bs-dismiss="toast"></button>
+                <i class="fas fa-info-circle me-2"></i>
+                <strong class="me-auto" data-i18n="toast.notification">Уведомление</strong>
+                <button type="button" class="btn-close" data-bs-dismiss="toast" aria-label="Close"></button>
             </div>
             <div class="toast-body" id="toastBody">
                 <!-- Сообщение будет вставлено сюда -->
@@ -260,12 +1148,248 @@
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script>
+        // Переводы
+        const translations = {
+            ru: {
+                'app.title': 'Система публикации постов',
+                'connection.checking': 'Проверка подключения...',
+                'connection.connected': 'Подключен',
+                'connection.disconnected': 'Отключен',
+                'status.groups': 'Группы',
+                'status.interval': 'Интервал',
+                'status.scheduler': 'Планировщик',
+                'status.nextPublication': 'Следующая публикация',
+                'status.running': 'Запущен',
+                'status.stopped': 'Остановлен',
+                'status.notActive': 'Неактивно',
+                'status.publishing': 'Публикация',
+                'status.waiting': 'Ожидание',
+                'publication.details': 'Детальный статус публикации',
+                'publication.currentStep': 'Текущий этап:',
+                'publication.progress': 'Прогресс:',
+                'publication.startTime': 'Время начала:',
+                'publication.lastUpdate': 'Последнее обновление:',
+                'publication.errors': 'Ошибки:',
+                'actions.quick': 'Быстрые действия',
+                'actions.publishNow': 'Опубликовать сейчас',
+                'actions.startScheduler': 'Запустить планировщик',
+                'actions.stop': 'Остановить',
+                'actions.reloadPost': 'Перезагрузить пост',
+                'settings.title': 'Настройки',
+                'settings.interval': 'Интервал публикации',
+                'settings.set': 'Установить',
+                'settings.maxMinutes': 'Максимум: 10080 минут (7 дней). Минимум: 1 минута.',
+                'groups.add': 'Добавить группу/канал',
+                'groups.input': 'Ссылка, @username или ID',
+                'groups.addButton': 'Добавить группу',
+                'groups.list': 'Список групп/каналов',
+                'groups.empty': 'Нет добавленных групп',
+                'groups.emptyDesc': 'Добавьте группу или канал для начала работы',
+                'groups.loading': 'Загрузка групп...',
+                'groups.lastPost': 'Последняя публикация:',
+                'groups.delete': 'Удалить группу',
+                'groups.deleteConfirm': 'Удалить эту группу?',
+                'toast.notification': 'Уведомление',
+                'toast.enterGroup': 'Введите ссылку, @username или ID группы',
+                'toast.maxInterval': 'Максимальный интервал: 10080 минут (7 дней)',
+                'toast.invalidInterval': 'Введите корректный интервал (больше 0)',
+                'toast.unknownUnit': 'Неизвестная единица измерения',
+                'toast.errorPublishing': 'Ошибка публикации',
+                'toast.errorStartScheduler': 'Ошибка запуска планировщика',
+                'toast.errorStopScheduler': 'Ошибка остановки планировщика',
+                'toast.errorReloadPost': 'Ошибка перезагрузки поста',
+                'toast.errorAddGroup': 'Ошибка добавления группы',
+                'toast.errorDeleteGroup': 'Ошибка удаления группы',
+                'toast.errorSetInterval': 'Ошибка установки интервала',
+                'loading': 'Загрузка...',
+                'unit.minutes': 'мин',
+                'unit.hours': 'часов'
+            },
+            en: {
+                'app.title': 'Post Publishing System',
+                'connection.checking': 'Checking connection...',
+                'connection.connected': 'Connected',
+                'connection.disconnected': 'Disconnected',
+                'status.groups': 'Groups',
+                'status.interval': 'Interval',
+                'status.scheduler': 'Scheduler',
+                'status.nextPublication': 'Next Publication',
+                'status.running': 'Running',
+                'status.stopped': 'Stopped',
+                'status.notActive': 'Not Active',
+                'status.publishing': 'Publishing',
+                'status.waiting': 'Waiting',
+                'publication.details': 'Detailed Publication Status',
+                'publication.currentStep': 'Current Step:',
+                'publication.progress': 'Progress:',
+                'publication.startTime': 'Start Time:',
+                'publication.lastUpdate': 'Last Update:',
+                'publication.errors': 'Errors:',
+                'actions.quick': 'Quick Actions',
+                'actions.publishNow': 'Publish Now',
+                'actions.startScheduler': 'Start Scheduler',
+                'actions.stop': 'Stop',
+                'actions.reloadPost': 'Reload Post',
+                'settings.title': 'Settings',
+                'settings.interval': 'Publication Interval',
+                'settings.set': 'Set',
+                'settings.maxMinutes': 'Max: 10080 minutes (7 days). Min: 1 minute.',
+                'groups.add': 'Add Group/Channel',
+                'groups.input': 'Link, @username or ID',
+                'groups.addButton': 'Add Group',
+                'groups.list': 'Groups/Channels List',
+                'groups.empty': 'No groups added',
+                'groups.emptyDesc': 'Add a group or channel to get started',
+                'groups.loading': 'Loading groups...',
+                'groups.lastPost': 'Last publication:',
+                'groups.delete': 'Delete group',
+                'groups.deleteConfirm': 'Delete this group?',
+                'toast.notification': 'Notification',
+                'toast.enterGroup': 'Enter link, @username or group ID',
+                'toast.maxInterval': 'Maximum interval: 10080 minutes (7 days)',
+                'toast.invalidInterval': 'Enter a valid interval (greater than 0)',
+                'toast.unknownUnit': 'Unknown unit',
+                'toast.errorPublishing': 'Publishing error',
+                'toast.errorStartScheduler': 'Error starting scheduler',
+                'toast.errorStopScheduler': 'Error stopping scheduler',
+                'toast.errorReloadPost': 'Error reloading post',
+                'toast.errorAddGroup': 'Error adding group',
+                'toast.errorDeleteGroup': 'Error deleting group',
+                'toast.errorSetInterval': 'Error setting interval',
+                'loading': 'Loading...',
+                'unit.minutes': 'min',
+                'unit.hours': 'hours'
+            }
+        };
+
         // Глобальные переменные
         let statusInterval;
         let groupsInterval;
+        let lastGroupsData = null; // Кэш последних данных групп
+        let currentLanguage = localStorage.getItem('language') || 'ru';
+        let currentTheme = localStorage.getItem('theme') || 'light';
+
+        // Функции для работы с темой и языком
+        function toggleTheme() {
+            const checkbox = document.getElementById('themeToggle');
+            const themeIcon = document.getElementById('themeIcon');
+            if (checkbox.checked) {
+                currentTheme = 'dark';
+                document.documentElement.setAttribute('data-theme', 'dark');
+                if (themeIcon) {
+                    themeIcon.className = 'fas fa-moon theme-icon';
+                }
+            } else {
+                currentTheme = 'light';
+                document.documentElement.setAttribute('data-theme', 'light');
+                if (themeIcon) {
+                    themeIcon.className = 'fas fa-sun theme-icon';
+                }
+            }
+            localStorage.setItem('theme', currentTheme);
+        }
+
+        function setTheme(theme) {
+            currentTheme = theme;
+            const checkbox = document.getElementById('themeToggle');
+            const themeIcon = document.getElementById('themeIcon');
+            if (checkbox) {
+                checkbox.checked = theme === 'dark';
+            }
+            if (themeIcon) {
+                themeIcon.className = theme === 'dark' ? 'fas fa-moon theme-icon' : 'fas fa-sun theme-icon';
+            }
+            document.documentElement.setAttribute('data-theme', theme);
+            localStorage.setItem('theme', theme);
+        }
+
+        function setLanguage(lang) {
+            currentLanguage = lang;
+            localStorage.setItem('language', lang);
+            
+            // Обновляем активную кнопку
+            document.querySelectorAll('.language-switcher button').forEach(btn => {
+                btn.classList.remove('active');
+            });
+            document.getElementById(`lang-${lang}`).classList.add('active');
+            
+            // Обновляем тексты
+            document.querySelectorAll('[data-i18n]').forEach(element => {
+                const key = element.getAttribute('data-i18n');
+                if (translations[lang] && translations[lang][key]) {
+                    element.textContent = translations[lang][key];
+                }
+            });
+            
+            // Обновляем тексты в динамически созданных элементах (например, в списке групп)
+            document.querySelectorAll('[data-i18n-key]').forEach(element => {
+                const key = element.getAttribute('data-i18n-key');
+                if (translations[lang] && translations[lang][key]) {
+                    element.textContent = translations[lang][key];
+                }
+            });
+            
+            // Обновляем опции select
+            const intervalUnit = document.getElementById('intervalUnit');
+            if (intervalUnit) {
+                intervalUnit.querySelector('option[value="minutes"]').textContent = t('unit.minutes');
+                intervalUnit.querySelector('option[value="hours"]').textContent = t('unit.hours');
+            }
+            
+            // Обновляем динамические тексты
+            updateDynamicTexts();
+            
+            // Немедленно обновляем статусы, которые могут изменяться
+            const schedulerStatus = document.getElementById('schedulerStatus');
+            if (schedulerStatus && schedulerStatus.textContent) {
+                const currentStatus = schedulerStatus.textContent.trim();
+                // Определяем текущий статус на основе класса или текста
+                const isRunning = schedulerStatus.classList.contains('bg-success') || 
+                                 currentStatus === 'Запущен' || 
+                                 currentStatus === 'Running';
+                schedulerStatus.textContent = isRunning ? t('status.running') : t('status.stopped');
+            }
+            
+            // Обновляем статус публикации, если он есть
+            const publicationStatus = document.getElementById('publicationStatus');
+            if (publicationStatus && publicationStatus.textContent) {
+                const currentPubStatus = publicationStatus.textContent.trim();
+                if (currentPubStatus === 'Публикация' || currentPubStatus === 'Publishing') {
+                    publicationStatus.textContent = t('status.publishing');
+                } else if (currentPubStatus === 'Ожидание' || currentPubStatus === 'Waiting') {
+                    publicationStatus.textContent = t('status.waiting');
+                } else if (currentPubStatus === 'Неактивно' || currentPubStatus === 'Not Active') {
+                    publicationStatus.textContent = t('status.notActive');
+                }
+            }
+            
+            // Обновляем динамические тексты
+            updateDynamicTexts();
+            
+            // Принудительно обновляем статус для получения актуальных данных
+            loadStatus();
+        }
+
+        function t(key) {
+            return translations[currentLanguage][key] || key;
+        }
+
+        function updateDynamicTexts() {
+            // Обновляем статусы, которые могут изменяться
+            const telegramStatusText = document.getElementById('telegramStatusText');
+            if (telegramStatusText) {
+                // Это будет обновлено в updateStatus
+            }
+        }
 
         // Инициализация
         document.addEventListener('DOMContentLoaded', function() {
+            // Применяем сохраненную тему
+            setTheme(currentTheme);
+            
+            // Применяем сохраненный язык
+            setLanguage(currentLanguage);
+            
             loadStatus();
             loadGroups();
             
@@ -276,7 +1400,8 @@
             
             // Обновляем статус каждые 5 секунд
             statusInterval = setInterval(loadStatus, 5000);
-            groupsInterval = setInterval(loadGroups, 10000);
+            // Обновляем группы реже - каждые 30 секунд (моргание исправлено через кэширование)
+            groupsInterval = setInterval(loadGroups, 30000);
             
             // Обработчики событий
             setupEventListeners();
@@ -285,8 +1410,8 @@
             setTimeout(() => {
                 const intervalInput = document.getElementById('intervalInput');
                 const intervalUnit = document.getElementById('intervalUnit');
-                if (intervalInput && !intervalInput.value) {
-                    intervalInput.value = 24; // Значение по умолчанию в часах
+                if (intervalInput && (!intervalInput.value || intervalInput.value === '24')) {
+                    intervalInput.value = 24;
                     if (intervalUnit) {
                         intervalUnit.value = 'hours';
                     }
@@ -318,15 +1443,53 @@
             
             if (data.telegram_connected) {
                 telegramStatus.className = 'telegram-status telegram-connected';
-                telegramStatusText.textContent = 'Подключен';
+                telegramStatusText.textContent = t('connection.connected');
             } else {
                 telegramStatus.className = 'telegram-status telegram-disconnected';
-                telegramStatusText.textContent = 'Отключен';
+                telegramStatusText.textContent = t('connection.disconnected');
             }
             
             // Статистика
             document.getElementById('groupsCount').textContent = data.groups_count;
-            document.getElementById('interval').textContent = data.interval;
+            
+            // Форматируем интервал на клиенте с учетом языка
+            const intervalElement = document.getElementById('interval');
+            if (data.interval_minutes !== undefined) {
+                const intervalMinutes = data.interval_minutes;
+                let intervalText;
+                if (currentLanguage === 'en') {
+                    if (intervalMinutes < 60) {
+                        intervalText = `${intervalMinutes} min`;
+                    } else if (intervalMinutes === 60) {
+                        intervalText = "1 hour";
+                    } else {
+                        const hours = Math.floor(intervalMinutes / 60);
+                        const minutes = intervalMinutes % 60;
+                        if (minutes > 0) {
+                            intervalText = `${hours}h ${minutes}m`;
+                        } else {
+                            intervalText = `${hours} hours`;
+                        }
+                    }
+                } else {
+                    if (intervalMinutes < 60) {
+                        intervalText = `${intervalMinutes} мин`;
+                    } else if (intervalMinutes === 60) {
+                        intervalText = "1 час";
+                    } else {
+                        const hours = Math.floor(intervalMinutes / 60);
+                        const minutes = intervalMinutes % 60;
+                        if (minutes > 0) {
+                            intervalText = `${hours}ч ${minutes}м`;
+                        } else {
+                            intervalText = `${hours}ч`;
+                        }
+                    }
+                }
+                intervalElement.textContent = intervalText;
+            } else {
+                intervalElement.textContent = data.interval;
+            }
             
             // Обновляем поля ввода интервала только если они пустые
             const intervalInput = document.getElementById('intervalInput');
@@ -345,11 +1508,12 @@
             
             // Планировщик
             const schedulerStatus = document.getElementById('schedulerStatus');
-            schedulerStatus.textContent = data.scheduler_status;
+            // Используем текущий язык для перевода статуса
+            schedulerStatus.textContent = data.scheduler_status === 'Запущен' ? t('status.running') : t('status.stopped');
             schedulerStatus.className = 'badge ' + (data.scheduler_status === 'Запущен' ? 'bg-success' : 'bg-secondary');
             
             // Следующая публикация
-            document.getElementById('nextRun').textContent = data.next_run;
+            document.getElementById('nextRun').textContent = data.next_run || (currentLanguage === 'ru' ? 'Неизвестно' : 'Unknown');
             
             // Статус публикации
             updatePublicationStatus(data.publication_status);
@@ -358,7 +1522,7 @@
         // Обновление статуса публикации
         function updatePublicationStatus(publicationStatus) {
             if (!publicationStatus) {
-                document.getElementById('publicationStatus').textContent = 'Неактивно';
+                document.getElementById('publicationStatus').textContent = t('status.notActive');
                 document.getElementById('publicationStatus').className = 'badge bg-secondary';
                 document.getElementById('publicationStatusPanel').style.display = 'none';
                 return;
@@ -368,7 +1532,7 @@
             const panel = document.getElementById('publicationStatusPanel');
             
             if (publicationStatus.is_publishing) {
-                statusElement.textContent = 'Публикация';
+                statusElement.textContent = t('status.publishing');
                 statusElement.className = 'badge bg-warning';
                 panel.style.display = 'block';
                 
@@ -385,7 +1549,7 @@
                 
                 const completed = publicationStatus.completed_groups || 0;
                 const total = publicationStatus.total_groups || 0;
-                progressText.textContent = `${progressPercent}% (${completed}/${total})`;
+                progressText.textContent = `${progressPercent.toFixed(1)}% (${completed}/${total})`;
                 
                 // Время
                 document.getElementById('startTime').textContent = publicationStatus.start_time_str || '-';
@@ -403,11 +1567,13 @@
                         const errorItem = document.createElement('div');
                         errorItem.className = 'list-group-item list-group-item-danger';
                         errorItem.innerHTML = `
-                            <div class="d-flex w-100 justify-content-between">
-                                <h6 class="mb-1">${error.group}</h6>
-                                <small>${error.time ? new Date(error.time).toLocaleTimeString() : ''}</small>
+                            <div class="d-flex w-100 justify-content-between align-items-start">
+                                <div>
+                                    <h6 class="mb-1"><i class="fas fa-exclamation-circle me-2"></i>${error.group}</h6>
+                                    <p class="mb-1">${error.error}</p>
+                                </div>
+                                <small class="text-muted">${error.time ? new Date(error.time).toLocaleTimeString() : ''}</small>
                             </div>
-                            <p class="mb-1">${error.error}</p>
                         `;
                         errorsList.appendChild(errorItem);
                     });
@@ -416,7 +1582,7 @@
                 }
                 
             } else {
-                statusElement.textContent = 'Ожидание';
+                statusElement.textContent = t('status.waiting');
                 statusElement.className = 'badge bg-success';
                 panel.style.display = 'none';
             }
@@ -442,23 +1608,53 @@
         function updateGroupsList(groups) {
             const groupsList = document.getElementById('groupsList');
             
+            // Проверяем, изменились ли данные
+            const groupsString = JSON.stringify(groups.map(g => ({
+                id: g.id,
+                title: g.title,
+                username: g.username,
+                last_post: g.last_post
+            })));
+            
+            if (lastGroupsData === groupsString) {
+                // Данные не изменились, не обновляем DOM
+                return;
+            }
+            
+            // Сохраняем новые данные
+            lastGroupsData = groupsString;
+            
             if (groups.length === 0) {
-                groupsList.innerHTML = '<div class="text-center text-muted">Нет добавленных групп</div>';
+                groupsList.innerHTML = `
+                    <div class="empty-state">
+                        <i class="fas fa-inbox"></i>
+                        <p>${t('groups.empty')}</p>
+                        <small>${t('groups.emptyDesc')}</small>
+                    </div>
+                `;
                 return;
             }
             
             let html = '';
-            groups.forEach(group => {
+            groups.forEach((group, index) => {
                 html += `
-                    <div class="group-item p-3 mb-2 border rounded">
-                        <div class="d-flex justify-content-between align-items-center">
-                            <div>
-                                <h6 class="mb-1">${group.title}</h6>
-                                <small class="text-muted">ID: ${group.id}</small>
-                                <br>
-                                <small class="text-muted">Последняя публикация: ${group.last_post}</small>
+                    <div class="group-item fade-in" style="animation-delay: ${index * 0.1}s">
+                        <div class="d-flex justify-content-between align-items-start">
+                            <div class="flex-grow-1">
+                                <h6 class="mb-2">
+                                    <i class="fas fa-users me-2 text-primary"></i>${group.title || 'Без названия'}
+                                </h6>
+                                <div class="d-flex flex-wrap gap-3 mb-2">
+                                    <small class="text-muted">
+                                        <i class="fas fa-hashtag me-1"></i>ID: ${group.id}
+                                    </small>
+                                    ${group.username ? `<small class="text-muted"><i class="fas fa-at me-1"></i>${group.username}</small>` : ''}
+                                </div>
+                                <small class="text-muted d-block">
+                                    <i class="fas fa-clock me-1"></i><span data-i18n-key="groups.lastPost">${t('groups.lastPost')}</span> <strong>${group.last_post || (currentLanguage === 'ru' ? 'Никогда' : 'Never')}</strong>
+                                </small>
                             </div>
-                            <button class="btn btn-outline-danger btn-sm" onclick="removeGroup('${group.id}')">
+                            <button class="btn btn-outline-danger btn-sm ms-3" onclick="removeGroup('${group.id}')" title="${t('groups.delete')}">
                                 <i class="fas fa-trash"></i>
                             </button>
                         </div>
@@ -471,22 +1667,13 @@
 
         // Настройка обработчиков событий
         function setupEventListeners() {
-            console.log('Настройка обработчиков событий');
-            
             // Добавление группы
             document.getElementById('addGroupBtn').addEventListener('click', addGroup);
             
             // Установка интервала
             const setIntervalBtn = document.getElementById('setIntervalBtn');
-            console.log('setIntervalBtn найден:', setIntervalBtn);
             if (setIntervalBtn) {
-                setIntervalBtn.addEventListener('click', function() {
-                    console.log('=== Кнопка установить нажата ===');
-                    setIntervalValue();
-                });
-                console.log('Обработчик события добавлен для setIntervalBtn');
-            } else {
-                console.error('setIntervalBtn не найден!');
+                setIntervalBtn.addEventListener('click', setIntervalValue);
             }
             
             // Быстрые действия
@@ -494,6 +1681,13 @@
             document.getElementById('startSchedulerBtn').addEventListener('click', startScheduler);
             document.getElementById('stopSchedulerBtn').addEventListener('click', stopScheduler);
             document.getElementById('reloadPostBtn').addEventListener('click', reloadPost);
+
+            // Enter в поле добавления группы
+            document.getElementById('groupInput').addEventListener('keypress', function(e) {
+                if (e.key === 'Enter') {
+                    addGroup();
+                }
+            });
         }
 
         // Добавление группы
@@ -502,7 +1696,7 @@
             const addBtn = document.getElementById('addGroupBtn');
             
             if (!groupInput.value.trim()) {
-                showToast('Введите ссылку, @username или ID группы', 'warning');
+                showToast(t('toast.enterGroup'), 'warning');
                 return;
             }
             
@@ -524,13 +1718,15 @@
                 if (response.ok) {
                     showToast(data.message, 'success');
                     groupInput.value = '';
+                    // Сбрасываем кэш, чтобы принудительно обновить список
+                    lastGroupsData = null;
                     loadGroups();
                     loadStatus();
                 } else {
                     showToast(data.error, 'error');
                 }
             } catch (error) {
-                showToast('Ошибка добавления группы', 'error');
+                showToast(t('toast.errorAddGroup'), 'error');
             } finally {
                 setButtonLoading(addBtn, false);
             }
@@ -538,7 +1734,7 @@
 
         // Удаление группы
         async function removeGroup(chatId) {
-            if (!confirm('Удалить эту группу?')) {
+            if (!confirm(t('groups.deleteConfirm'))) {
                 return;
             }
             
@@ -551,40 +1747,35 @@
                 
                 if (response.ok) {
                     showToast(data.message, 'success');
+                    // Сбрасываем кэш, чтобы принудительно обновить список
+                    lastGroupsData = null;
                     loadGroups();
                     loadStatus();
                 } else {
                     showToast(data.error, 'error');
                 }
             } catch (error) {
-                showToast('Ошибка удаления группы', 'error');
+                showToast(t('toast.errorDeleteGroup'), 'error');
             }
         }
 
         // Установка интервала
         async function setIntervalValue() {
-            console.log('=== setIntervalValue вызвана ===');
             const intervalInput = document.getElementById('intervalInput');
             const intervalUnit = document.getElementById('intervalUnit');
             const setBtn = document.getElementById('setIntervalBtn');
-            
-            console.log('intervalInput элемент:', intervalInput);
-            console.log('intervalInput.value:', intervalInput.value);
-            console.log('intervalUnit.value:', intervalUnit.value);
             
             const value = parseInt(intervalInput.value);
             const unit = intervalUnit.value;
             
             if (!value || value <= 0) {
-                console.log('Ошибка валидации: неверный интервал');
-                showToast('Введите корректный интервал (больше 0)', 'warning');
+                showToast(t('toast.invalidInterval'), 'warning');
                 return;
             }
             
             // Дополнительная валидация
             if (value > 10080) {
-                console.log('Ошибка валидации: интервал слишком большой');
-                showToast('Максимальный интервал: 10080 минут (7 дней)', 'warning');
+                showToast(t('toast.maxInterval'), 'warning');
                 return;
             }
             
@@ -592,17 +1783,12 @@
             let minutes;
             if (unit === 'hours') {
                 minutes = value * 60;
-                console.log(`Конвертируем ${value} часов в ${minutes} минут`);
             } else if (unit === 'minutes') {
                 minutes = value;
-                console.log(`Используем ${value} минут`);
             } else {
-                console.log('Неизвестная единица измерения:', unit);
-                showToast('Неизвестная единица измерения', 'error');
+                showToast(t('toast.unknownUnit'), 'error');
                 return;
             }
-            
-            console.log('Устанавливаем интервал:', minutes, 'минут');
             
             setButtonLoading(setBtn, true);
             
@@ -621,14 +1807,13 @@
                 
                 if (response.ok) {
                     showToast(data.message, 'success');
-                    // Обновляем отображаемое значение интервала
                     document.getElementById('interval').textContent = data.interval || minutes;
                     loadStatus();
                 } else {
                     showToast(data.error, 'error');
                 }
             } catch (error) {
-                showToast('Ошибка установки интервала', 'error');
+                showToast(t('toast.errorSetInterval'), 'error');
             } finally {
                 setButtonLoading(setBtn, false);
             }
@@ -652,7 +1837,7 @@
                     showToast(data.error, 'error');
                 }
             } catch (error) {
-                showToast('Ошибка публикации', 'error');
+                showToast(t('toast.errorPublishing'), 'error');
             } finally {
                 setButtonLoading(btn, false);
             }
@@ -677,7 +1862,7 @@
                     showToast(data.error, 'error');
                 }
             } catch (error) {
-                showToast('Ошибка запуска планировщика', 'error');
+                showToast(t('toast.errorStartScheduler'), 'error');
             } finally {
                 setButtonLoading(btn, false);
             }
@@ -702,7 +1887,7 @@
                     showToast(data.error, 'error');
                 }
             } catch (error) {
-                showToast('Ошибка остановки планировщика', 'error');
+                showToast(t('toast.errorStopScheduler'), 'error');
             } finally {
                 setButtonLoading(btn, false);
             }
@@ -726,7 +1911,7 @@
                     showToast(data.error, 'error');
                 }
             } catch (error) {
-                showToast('Ошибка перезагрузки поста', 'error');
+                showToast(t('toast.errorReloadPost'), 'error');
             } finally {
                 setButtonLoading(btn, false);
             }
@@ -734,31 +1919,46 @@
 
         // Утилиты
         function setButtonLoading(button, loading) {
-            console.log('setButtonLoading вызвана:', button, loading);
-            
             if (loading) {
                 button.disabled = true;
-                // Сохраняем оригинальный текст
                 if (!button.getAttribute('data-original-text')) {
-                    button.setAttribute('data-original-text', button.textContent);
+                    button.setAttribute('data-original-text', button.innerHTML);
                 }
-                button.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Загрузка...';
-                console.log('Кнопка переведена в состояние загрузки');
+                const loadingText = t('loading');
+                button.innerHTML = `<span class="spinner-border spinner-border-sm me-2"></span>${loadingText}`;
             } else {
                 button.disabled = false;
-                // Восстанавливаем оригинальный текст
-                const originalText = button.getAttribute('data-original-text') || 'Установить';
-                button.textContent = originalText;
-                console.log('Кнопка возвращена в нормальное состояние');
+                const originalText = button.getAttribute('data-original-text');
+                if (originalText) {
+                    button.innerHTML = originalText;
+                    button.removeAttribute('data-original-text');
+                    // Обновляем переводы в кнопке после восстановления
+                    updateButtonTranslations(button);
+                }
             }
+        }
+
+        function updateButtonTranslations(button) {
+            // Обновляем переводы в кнопке после восстановления
+            const i18nElements = button.querySelectorAll('[data-i18n]');
+            i18nElements.forEach(element => {
+                const key = element.getAttribute('data-i18n');
+                if (translations[currentLanguage] && translations[currentLanguage][key]) {
+                    element.textContent = translations[currentLanguage][key];
+                }
+            });
         }
 
         function showToast(message, type = 'info') {
             const toast = document.getElementById('toast');
             const toastBody = document.getElementById('toastBody');
             const toastHeader = toast.querySelector('.toast-header i');
+            const toastHeaderTitle = toast.querySelector('.toast-header strong');
             
             toastBody.textContent = message;
+            if (toastHeaderTitle) {
+                toastHeaderTitle.textContent = t('toast.notification');
+            }
             
             // Устанавливаем цвет иконки
             toastHeader.className = 'fas me-2';
@@ -781,4 +1981,5 @@
         }
     </script>
 </body>
+</html>
 </html>

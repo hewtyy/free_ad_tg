@@ -28,6 +28,12 @@ post_handler = None
 telegram_connected = False
 web_telegram_client = None
 
+def set_scheduler(scheduler_instance):
+    """Установка экземпляра планировщика из main.py"""
+    global scheduler
+    scheduler = scheduler_instance
+    logger.info("Планировщик установлен из main.py")
+
 def run_async(coro):
     """Запуск асинхронной функции"""
     import concurrent.futures
@@ -158,9 +164,13 @@ def init_web_server():
     """Инициализация веб-сервера"""
     global scheduler, post_handler, telegram_connected
     
-    # Инициализируем компоненты
-    scheduler = PostScheduler()
-    post_handler = PostHandler()
+    # Инициализируем компоненты только если они еще не установлены
+    if scheduler is None:
+        scheduler = PostScheduler()
+        logger.info("Создан новый экземпляр планировщика в web_server")
+    
+    if post_handler is None:
+        post_handler = PostHandler()
     
     # Проверяем подключение к Telegram
     telegram_connected = telegram_client.is_connected()
