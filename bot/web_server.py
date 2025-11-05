@@ -5,7 +5,8 @@ import asyncio
 import json
 import logging
 from datetime import datetime, timedelta
-from flask import Flask, render_template, request, jsonify, redirect, url_for, session
+from pathlib import Path
+from flask import Flask, render_template, jsonify, request, session, redirect, url_for, send_from_directory
 from flask_cors import CORS
 from functools import wraps
 from threading import Thread
@@ -265,6 +266,16 @@ def init_web_server():
     # Проверяем подключение к Telegram
     telegram_connected = telegram_client.is_connected()
 
+@app.route('/static/<path:filename>')
+def serve_static(filename):
+    """Сервирование статических файлов (изображений)"""
+    try:
+        data_dir = Path(__file__).parent / 'data'
+        return send_from_directory(str(data_dir), filename)
+    except Exception as e:
+        logger.error(f"Ошибка загрузки файла {filename}: {e}")
+        return jsonify({'error': 'File not found'}), 404
+
 @app.route('/')
 def index():
     """Главная страница"""
@@ -398,14 +409,25 @@ def api_groups():
         for group in groups:
             logger.info(f"Обрабатываем группу: {group}, тип: {type(group)}, длина: {len(group) if hasattr(group, '__len__') else 'N/A'}")
             
-            if isinstance(group, (list, tuple)) and len(group) >= 5:
+            if isinstance(group, (list, tuple)) and len(group) >= 6:
+                # База данных возвращает: (chat_id, title, username, added_at, last_posted, is_disabled)
+                chat_id, title, username, added_at, last_post_time, is_disabled = group
+                groups_data.append({
+                    'id': chat_id,
+                    'title': title,
+                    'username': username,
+                    'last_post': _format_timestamp(last_post_time),
+                    'is_disabled': bool(is_disabled)
+                })
+            elif isinstance(group, (list, tuple)) and len(group) >= 5:
                 # База данных возвращает: (chat_id, title, username, added_at, last_posted)
                 chat_id, title, username, added_at, last_post_time = group
                 groups_data.append({
                     'id': chat_id,
                     'title': title,
                     'username': username,
-                    'last_post': _format_timestamp(last_post_time)
+                    'last_post': _format_timestamp(last_post_time),
+                    'is_disabled': False
                 })
             elif isinstance(group, (list, tuple)) and len(group) >= 4:
                 # Fallback для старого формата: (chat_id, title, added_at, last_posted)
@@ -442,7 +464,7 @@ def api_groups():
                     'last_post': "Никогда"
                 })
         
-        return jsonify(groups_data)
+        return jsonify({'groups': groups_data})
     except Exception as e:
         logger.error(f"Ошибка получения групп: {e}")
         return jsonify({'error': str(e)}), 500
@@ -700,6 +722,486 @@ def api_reset_publication_status():
         
     except Exception as e:
         logger.error(f"Ошибка сброса статуса публикации: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/publication_history', methods=['GET'])
+@login_required
+def api_publication_history():
+    """API для получения истории публикаций"""
+    try:
+        # Получаем параметры фильтрации
+        limit = request.args.get('limit', default=100, type=int)
+        offset = request.args.get('offset', default=0, type=int)
+        chat_id = request.args.get('chat_id', default=None, type=str)
+        status = request.args.get('status', default=None, type=str)
+        start_date = request.args.get('start_date', default=None, type=str)
+        end_date = request.args.get('end_date', default=None, type=str)
+        search = request.args.get('search', default=None, type=str)
+        
+        # Получаем историю
+        history = run_async(db.get_publication_history(
+            limit=limit,
+            offset=offset,
+            chat_id=chat_id,
+            status=status,
+            start_date=start_date,
+            end_date=end_date,
+            search=search
+        ))
+        
+        # Форматируем данные для ответа
+        history_data = []
+        for record in history:
+            id, chat_id_val, chat_title, chat_username, status_val, error_message, published_at, retry_count = record
+            history_data.append({
+                'id': id,
+                'chat_id': chat_id_val,
+                'chat_title': chat_title,
+                'chat_username': chat_username,
+                'status': status_val,
+                'error_message': error_message,
+                'published_at': _format_timestamp(published_at),
+                'retry_count': retry_count
+            })
+        
+        return jsonify({
+            'success': True,
+            'history': history_data,
+            'total': len(history_data)
+        })
+        
+    except Exception as e:
+        logger.error(f"Ошибка получения истории публикаций: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/publication_statistics', methods=['GET'])
+@login_required
+def api_publication_statistics():
+    """API для получения статистики публикаций"""
+    try:
+        # Получаем параметры фильтрации по датам
+        start_date = request.args.get('start_date', default=None, type=str)
+        end_date = request.args.get('end_date', default=None, type=str)
+        
+        # Получаем статистику
+        statistics = run_async(db.get_publication_statistics(
+            start_date=start_date,
+            end_date=end_date
+        ))
+        
+        return jsonify({
+            'success': True,
+            'statistics': statistics
+        })
+        
+    except Exception as e:
+        logger.error(f"Ошибка получения статистики: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/publication_history/clear', methods=['POST'])
+@login_required
+def api_clear_publication_history():
+    """API для очистки истории публикаций"""
+    try:
+        data = request.get_json() or {}
+        days = data.get('days', None)
+        
+        if days is not None:
+            days = int(days)
+        
+        success = run_async(db.clear_publication_history(days=days))
+        
+        if success:
+            return jsonify({
+                'success': True,
+                'message': f'История очищена' + (f' (оставлены записи за последние {days} дней)' if days else '')
+            })
+        else:
+            return jsonify({'error': 'Ошибка при очистке истории'}), 500
+        
+    except Exception as e:
+        logger.error(f"Ошибка очистки истории: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/templates', methods=['GET'])
+@login_required
+def api_get_templates():
+    """API для получения списка шаблонов"""
+    try:
+        templates = run_async(db.get_all_templates())
+        
+        templates_data = []
+        for template in templates:
+            id, name, content, is_active, created_at, updated_at = template
+            templates_data.append({
+                'id': id,
+                'name': name,
+                'content': content,
+                'is_active': bool(is_active),
+                'created_at': _format_timestamp(created_at),
+                'updated_at': _format_timestamp(updated_at)
+            })
+        
+        return jsonify({
+            'success': True,
+            'templates': templates_data
+        })
+        
+    except Exception as e:
+        logger.error(f"Ошибка получения шаблонов: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/templates', methods=['POST'])
+@login_required
+def api_create_template():
+    """API для создания шаблона"""
+    try:
+        data = request.get_json()
+        
+        if not data or 'name' not in data or 'content' not in data:
+            return jsonify({'error': 'Не указаны name и content'}), 400
+        
+        template_id = run_async(db.add_post_template(data['name'], data['content']))
+        
+        if template_id:
+            return jsonify({
+                'success': True,
+                'message': 'Шаблон создан',
+                'template_id': template_id
+            })
+        else:
+            return jsonify({'error': 'Ошибка при создании шаблона'}), 500
+        
+    except Exception as e:
+        logger.error(f"Ошибка создания шаблона: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/templates/<int:template_id>', methods=['PUT'])
+@login_required
+def api_update_template(template_id):
+    """API для обновления шаблона"""
+    try:
+        data = request.get_json() or {}
+        
+        name = data.get('name')
+        content = data.get('content')
+        
+        success = run_async(db.update_template(template_id, name=name, content=content))
+        
+        if success:
+            # Перезагружаем пост, если это активный шаблон
+            if post_handler:
+                post_handler.reload_post_content()
+            
+            return jsonify({
+                'success': True,
+                'message': 'Шаблон обновлен'
+            })
+        else:
+            return jsonify({'error': 'Ошибка при обновлении шаблона'}), 500
+        
+    except Exception as e:
+        logger.error(f"Ошибка обновления шаблона: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/templates/<int:template_id>', methods=['DELETE'])
+@login_required
+def api_delete_template(template_id):
+    """API для удаления шаблона"""
+    try:
+        success = run_async(db.delete_template(template_id))
+        
+        if success:
+            return jsonify({
+                'success': True,
+                'message': 'Шаблон удален'
+            })
+        else:
+            return jsonify({'error': 'Ошибка при удалении шаблона'}), 500
+        
+    except Exception as e:
+        logger.error(f"Ошибка удаления шаблона: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/templates/<int:template_id>/activate', methods=['POST'])
+@login_required
+def api_activate_template(template_id):
+    """API для активации шаблона"""
+    try:
+        success = run_async(db.set_active_template(template_id))
+        
+        if success:
+            # Перезагружаем пост
+            if post_handler:
+                post_handler.reload_post_content()
+            
+            return jsonify({
+                'success': True,
+                'message': 'Шаблон активирован'
+            })
+        else:
+            return jsonify({'error': 'Ошибка при активации шаблона'}), 500
+        
+    except Exception as e:
+        logger.error(f"Ошибка активации шаблона: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/post/info', methods=['GET'])
+@login_required
+def api_post_info():
+    """API для получения информации о текущем посте"""
+    try:
+        if not post_handler:
+            return jsonify({'error': 'Post handler не инициализирован'}), 500
+        
+        info = post_handler.get_post_info()
+        
+        # Получаем путь к изображению, если есть
+        image_url = None
+        if info.get('has_image') and info.get('image_path'):
+            # Проверяем, что файл действительно существует
+            image_path = Path(info['image_path'])
+            if image_path.exists() and image_path.is_file():
+                # Возвращаем относительный путь к изображению
+                image_url = f'/static/{image_path.name}'
+            else:
+                # Файл не существует, не возвращаем URL
+                image_url = None
+        
+        return jsonify({
+            'success': True,
+            'post': {
+                'text': info.get('text', ''),
+                'text_length': info.get('text_length', 0),
+                'has_image': image_url is not None,  # Устанавливаем has_image только если URL действителен
+                'image_url': image_url,
+                'use_template': info.get('use_template', False),
+                'template_name': info.get('template_name'),
+                'template_id': info.get('template_id')
+            }
+        })
+        
+    except Exception as e:
+        logger.error(f"Ошибка получения информации о посте: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/post/preview', methods=['POST'])
+@login_required
+def api_post_preview():
+    """API для предпросмотра поста с заменой переменных"""
+    try:
+        data = request.get_json() or {}
+        chat_id = data.get('chat_id', '123456789')
+        chat_title = data.get('chat_title', 'Тестовая группа')
+        
+        # Получаем текущий текст поста
+        if not post_handler:
+            return jsonify({'error': 'Post handler не инициализирован'}), 500
+        
+        # Получаем текст с заменой переменных
+        preview_text = run_async(post_handler.get_post_text(chat_id, chat_title))
+        
+        # Получаем информацию об изображении
+        info = post_handler.get_post_info()
+        image_url = None
+        has_image = False
+        if info.get('has_image') and info.get('image_path'):
+            # Проверяем, что файл действительно существует
+            image_path = Path(info['image_path'])
+            if image_path.exists() and image_path.is_file():
+                image_url = f'/static/{image_path.name}'
+                has_image = True
+        
+        return jsonify({
+            'success': True,
+            'preview': {
+                'text': preview_text,
+                'has_image': has_image,
+                'image_url': image_url if has_image else None
+            }
+        })
+        
+    except Exception as e:
+        logger.error(f"Ошибка предпросмотра поста: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/schedules', methods=['GET'])
+@login_required
+def api_get_schedules():
+    """API для получения списка расписаний"""
+    try:
+        schedules = run_async(db.get_all_schedules())
+        
+        schedules_data = []
+        for schedule in schedules:
+            id, schedule_type, schedule_data, is_active, created_at, updated_at = schedule
+            schedules_data.append({
+                'id': id,
+                'schedule_type': schedule_type,
+                'schedule_data': schedule_data,
+                'is_active': bool(is_active),
+                'created_at': _format_timestamp(created_at),
+                'updated_at': _format_timestamp(updated_at)
+            })
+        
+        return jsonify({
+            'success': True,
+            'schedules': schedules_data
+        })
+        
+    except Exception as e:
+        logger.error(f"Ошибка получения расписаний: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/schedules', methods=['POST'])
+@login_required
+def api_create_schedule():
+    """API для создания расписания"""
+    try:
+        data = request.get_json()
+        
+        if not data or 'schedule_type' not in data or 'schedule_data' not in data:
+            return jsonify({'error': 'Не указаны schedule_type и schedule_data'}), 400
+        
+        schedule_id = run_async(db.add_schedule(data['schedule_type'], data['schedule_data']))
+        
+        if schedule_id:
+            # Если это первое расписание или оно помечено как активное, активируем его
+            if data.get('is_active', False):
+                run_async(db.set_active_schedule(schedule_id))
+                # Перезагружаем расписание в планировщике
+                if scheduler:
+                    async def reload():
+                        await scheduler.reload_schedule()
+                    run_async(reload())
+            
+            return jsonify({
+                'success': True,
+                'message': 'Расписание создано',
+                'schedule_id': schedule_id
+            })
+        else:
+            return jsonify({'error': 'Ошибка при создании расписания'}), 500
+        
+    except Exception as e:
+        logger.error(f"Ошибка создания расписания: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/schedules/<int:schedule_id>', methods=['PUT'])
+@login_required
+def api_update_schedule(schedule_id):
+    """API для обновления расписания"""
+    try:
+        data = request.get_json() or {}
+        
+        schedule_type = data.get('schedule_type')
+        schedule_data = data.get('schedule_data')
+        
+        success = run_async(db.update_schedule(schedule_id, schedule_type=schedule_type, schedule_data=schedule_data))
+        
+        if success:
+            # Если расписание активно, перезагружаем его
+            schedule = run_async(db.get_active_schedule())
+            if schedule and schedule[0] == schedule_id:
+                if scheduler:
+                    run_async(scheduler.reload_schedule())
+            
+            return jsonify({
+                'success': True,
+                'message': 'Расписание обновлено'
+            })
+        else:
+            return jsonify({'error': 'Ошибка при обновлении расписания'}), 500
+        
+    except Exception as e:
+        logger.error(f"Ошибка обновления расписания: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/schedules/<int:schedule_id>', methods=['DELETE'])
+@login_required
+def api_delete_schedule(schedule_id):
+    """API для удаления расписания"""
+    try:
+        success = run_async(db.delete_schedule(schedule_id))
+        
+        if success:
+            return jsonify({
+                'success': True,
+                'message': 'Расписание удалено'
+            })
+        else:
+            return jsonify({'error': 'Ошибка при удалении расписания'}), 500
+        
+    except Exception as e:
+        logger.error(f"Ошибка удаления расписания: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/schedules/<int:schedule_id>/activate', methods=['POST'])
+@login_required
+def api_activate_schedule(schedule_id):
+    """API для активации расписания"""
+    try:
+        success = run_async(db.set_active_schedule(schedule_id))
+        
+        if success:
+            # Перезагружаем расписание в планировщике
+            if scheduler:
+                run_async(scheduler.reload_schedule())
+            
+            return jsonify({
+                'success': True,
+                'message': 'Расписание активировано'
+            })
+        else:
+            return jsonify({'error': 'Ошибка при активации расписания'}), 500
+        
+    except Exception as e:
+        logger.error(f"Ошибка активации расписания: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/groups/<chat_id>/toggle-disabled', methods=['POST'])
+@login_required
+def api_toggle_group_disabled(chat_id):
+    """API для добавления/удаления группы из черного списка"""
+    try:
+        data = request.get_json() or {}
+        is_disabled = data.get('is_disabled', True)
+        
+        success = run_async(db.set_group_disabled(chat_id, is_disabled))
+        
+        if success:
+            action = 'добавлена в черный список' if is_disabled else 'удалена из черного списка'
+            return jsonify({
+                'success': True,
+                'message': f'Группа {action}'
+            })
+        else:
+            return jsonify({'error': 'Группа не найдена или произошла ошибка'}), 400
+            
+    except Exception as e:
+        logger.error(f"Ошибка изменения статуса группы: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/templates/preview', methods=['POST'])
+@login_required
+def api_preview_template():
+    """API для предпросмотра шаблона с заменой переменных"""
+    try:
+        data = request.get_json() or {}
+        content = data.get('content', '')
+        
+        # Создаем временный экземпляр для замены переменных
+        from handlers.post import PostHandler
+        temp_handler = PostHandler()
+        preview_text = temp_handler._replace_variables(content, '123456789', 'Тестовая группа')
+        
+        return jsonify({
+            'success': True,
+            'preview': preview_text
+        })
+        
+    except Exception as e:
+        logger.error(f"Ошибка предпросмотра шаблона: {e}")
         return jsonify({'error': str(e)}), 500
 
 def run_web_server(host='0.0.0.0', port=5000, debug=False):

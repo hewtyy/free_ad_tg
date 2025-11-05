@@ -7,6 +7,7 @@ import logging
 from datetime import datetime, timedelta
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.interval import IntervalTrigger
+from apscheduler.triggers.cron import CronTrigger
 from apscheduler.executors.asyncio import AsyncIOExecutor
 from apscheduler.jobstores.memory import MemoryJobStore
 from config import MIN_DELAY, MAX_DELAY, PUBLICATION_RETRY_ATTEMPTS, PUBLICATION_RETRY_DELAY
@@ -70,13 +71,13 @@ class PostScheduler:
             logger.warning("post_handler не инициализирован в планировщике")
     
     async def start(self):
-        """Запуск планировщика"""
+        """Запуск планировщика с активным расписанием"""
         try:
             # Инициализация базы данных
             await db.init_db()
             
-            # Получаем интервал из базы данных
-            interval_minutes = await db.get_post_interval_minutes()
+            # Получаем активное расписание
+            schedule = await db.get_active_schedule()
             
             # Устанавливаем флаг запуска ПЕРЕД добавлением задачи
             self.is_running = True
@@ -91,33 +92,159 @@ class PostScheduler:
                 logger.info("Планировщик уже запущен")
                 print("Планировщик уже запущен")
             
-            # Добавляем задачу в планировщик
-            self.scheduler.add_job(
-                self._scheduled_post,
-                trigger=IntervalTrigger(minutes=interval_minutes),
-                id='post_job',
-                replace_existing=True
-            )
-            logger.info(f"✅ Задача 'post_job' добавлена в планировщик")
-            
-            # Форматируем интервал для вывода
-            if interval_minutes < 60:
-                logger.info(f"Планировщик запущен с интервалом {interval_minutes} минут")
-                print(f"Планировщик запущен с интервалом {interval_minutes} минут")
-            else:
-                hours = interval_minutes // 60
-                minutes = interval_minutes % 60
-                if minutes > 0:
-                    logger.info(f"Планировщик запущен с интервалом {hours}ч {minutes}м")
-                    print(f"Планировщик запущен с интервалом {hours}ч {minutes}м")
+            # Если есть активное расписание, используем его
+            if schedule:
+                schedule_id, schedule_type, schedule_data, is_active, created_at, updated_at = schedule
+                trigger = self._create_trigger(schedule_type, schedule_data)
+                if trigger:
+                    self.scheduler.add_job(
+                        self._scheduled_post,
+                        trigger=trigger,
+                        id='post_job',
+                        replace_existing=True
+                    )
+                    logger.info(f"✅ Задача 'post_job' добавлена с расписанием типа '{schedule_type}'")
+                    self._log_schedule_info(schedule_type, schedule_data)
                 else:
-                    logger.info(f"Планировщик запущен с интервалом {hours} часов")
-                    print(f"Планировщик запущен с интервалом {hours} часов")
-                    
+                    logger.error(f"Не удалось создать триггер для расписания типа '{schedule_type}'")
+                    # Fallback на интервал по умолчанию
+                    await self._setup_default_interval()
+            else:
+                # Если нет активного расписания, используем интервал по умолчанию
+                await self._setup_default_interval()
+            
         except Exception as e:
             logger.error(f"Ошибка запуска планировщика: {e}")
-            print(f"Ошибка запуска планировщика: {e}")
+            import traceback
+            traceback.print_exc()
             self.is_running = False
+    
+    async def _setup_default_interval(self):
+        """Настройка интервала по умолчанию (для обратной совместимости)"""
+        interval_minutes = await db.get_post_interval_minutes()
+        self.scheduler.add_job(
+            self._scheduled_post,
+            trigger=IntervalTrigger(minutes=interval_minutes),
+            id='post_job',
+            replace_existing=True
+        )
+        logger.info(f"✅ Задача 'post_job' добавлена с интервалом {interval_minutes} минут")
+        if interval_minutes < 60:
+            logger.info(f"Планировщик запущен с интервалом {interval_minutes} минут")
+            print(f"Планировщик запущен с интервалом {interval_minutes} минут")
+        else:
+            hours = interval_minutes // 60
+            mins = interval_minutes % 60
+            if mins > 0:
+                logger.info(f"Планировщик запущен с интервалом {hours} часов {mins} минут")
+                print(f"Планировщик запущен с интервалом {hours} часов {mins} минут")
+            else:
+                logger.info(f"Планировщик запущен с интервалом {hours} часов")
+                print(f"Планировщик запущен с интервалом {hours} часов")
+    
+    def _create_trigger(self, schedule_type: str, schedule_data: dict):
+        """
+        Создание триггера на основе типа расписания и данных
+        
+        Args:
+            schedule_type: Тип расписания (interval, time, days, hours)
+            schedule_data: Данные расписания
+            
+        Returns:
+            Объект триггера или None
+        """
+        try:
+            if schedule_type == 'interval':
+                # Простой интервал: {"minutes": 60}
+                minutes = schedule_data.get('minutes', 1440)
+                return IntervalTrigger(minutes=minutes, timezone=MOSCOW_TZ)
+            
+            elif schedule_type == 'time':
+                # Конкретное время каждый день: {"hour": 12, "minute": 30}
+                hour = schedule_data.get('hour', 12)
+                minute = schedule_data.get('minute', 0)
+                return CronTrigger(hour=hour, minute=minute, timezone=MOSCOW_TZ)
+            
+            elif schedule_type == 'days':
+                # Определенные дни недели: {"days": [0, 2, 4], "hour": 10, "minute": 0}
+                # days: 0=Понедельник, 1=Вторник, ..., 6=Воскресенье
+                days = schedule_data.get('days', [])
+                hour = schedule_data.get('hour', 12)
+                minute = schedule_data.get('minute', 0)
+                if days:
+                    # Конвертируем дни недели для CronTrigger (mon=0, tue=1, ..., sun=6)
+                    day_of_week = ','.join([str(d) for d in days])
+                    return CronTrigger(day_of_week=day_of_week, hour=hour, minute=minute, timezone=MOSCOW_TZ)
+                else:
+                    return None
+            
+            elif schedule_type == 'hours':
+                # Часовые окна: {"start_hour": 9, "end_hour": 18, "interval_minutes": 60}
+                # Публикация каждые interval_minutes в период с start_hour до end_hour
+                start_hour = schedule_data.get('start_hour', 9)
+                end_hour = schedule_data.get('end_hour', 18)
+                interval_minutes = schedule_data.get('interval_minutes', 60)
+                
+                # Для часовых окон используем CronTrigger
+                # Если interval_minutes >= 60, публикуем каждый час в диапазоне
+                # Если interval_minutes < 60, публикуем каждые interval_minutes минут в диапазоне
+                if interval_minutes >= 60:
+                    # Каждый час в диапазоне
+                    return CronTrigger(
+                        hour=f'{start_hour}-{end_hour}',
+                        minute=0,
+                        timezone=MOSCOW_TZ
+                    )
+                else:
+                    # Каждые interval_minutes минут в диапазоне часов
+                    return CronTrigger(
+                        hour=f'{start_hour}-{end_hour}',
+                        minute=f'*/{interval_minutes}',
+                        timezone=MOSCOW_TZ
+                    )
+            
+            else:
+                logger.error(f"Неизвестный тип расписания: {schedule_type}")
+                return None
+                
+        except Exception as e:
+            logger.error(f"Ошибка создания триггера: {e}")
+            import traceback
+            traceback.print_exc()
+            return None
+    
+    def _log_schedule_info(self, schedule_type: str, schedule_data: dict):
+        """Логирование информации о расписании"""
+        if schedule_type == 'interval':
+            minutes = schedule_data.get('minutes', 1440)
+            if minutes < 60:
+                logger.info(f"Расписание: каждые {minutes} минут")
+            else:
+                hours = minutes // 60
+                mins = minutes % 60
+                if mins > 0:
+                    logger.info(f"Расписание: каждые {hours} часов {mins} минут")
+                else:
+                    logger.info(f"Расписание: каждые {hours} часов")
+        
+        elif schedule_type == 'time':
+            hour = schedule_data.get('hour', 12)
+            minute = schedule_data.get('minute', 0)
+            logger.info(f"Расписание: каждый день в {hour:02d}:{minute:02d} (МСК)")
+        
+        elif schedule_type == 'days':
+            days = schedule_data.get('days', [])
+            hour = schedule_data.get('hour', 12)
+            minute = schedule_data.get('minute', 0)
+            day_names = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс']
+            day_list = ', '.join([day_names[d] for d in days if 0 <= d <= 6])
+            logger.info(f"Расписание: {day_list} в {hour:02d}:{minute:02d} (МСК)")
+        
+        elif schedule_type == 'hours':
+            start_hour = schedule_data.get('start_hour', 9)
+            end_hour = schedule_data.get('end_hour', 18)
+            interval_minutes = schedule_data.get('interval_minutes', 60)
+            logger.info(f"Расписание: каждые {interval_minutes} минут с {start_hour:02d}:00 до {end_hour:02d}:00 (МСК)")
     
     async def stop(self):
         """Остановка планировщика"""
@@ -167,6 +294,46 @@ class PostScheduler:
             logger.error(f"💥 Критическая ошибка при остановке планировщика: {e}")
             print(f"💥 Критическая ошибка при остановке планировщика: {e}")
             self.is_running = False
+    
+    async def reload_schedule(self):
+        """Перезагрузка расписания (например, после изменения в БД)"""
+        try:
+            # Если планировщик не запущен, просто выходим
+            if not self.is_running or not self.scheduler.running:
+                logger.info("Планировщик не запущен, перезагрузка расписания не требуется")
+                return
+            
+            # Удаляем старую задачу
+            try:
+                self.scheduler.remove_job('post_job')
+            except:
+                pass  # Задача может не существовать
+            
+            # Получаем новое активное расписание
+            schedule = await db.get_active_schedule()
+            
+            if schedule:
+                schedule_id, schedule_type, schedule_data, is_active, created_at, updated_at = schedule
+                trigger = self._create_trigger(schedule_type, schedule_data)
+                if trigger:
+                    self.scheduler.add_job(
+                        self._scheduled_post,
+                        trigger=trigger,
+                        id='post_job',
+                        replace_existing=True
+                    )
+                    logger.info(f"✅ Расписание перезагружено: тип '{schedule_type}'")
+                    self._log_schedule_info(schedule_type, schedule_data)
+                else:
+                    logger.error(f"Не удалось создать триггер для расписания типа '{schedule_type}'")
+            else:
+                # Если нет активного расписания, используем интервал по умолчанию
+                await self._setup_default_interval()
+                
+        except Exception as e:
+            logger.error(f"Ошибка перезагрузки расписания: {e}")
+            import traceback
+            traceback.print_exc()
     
     async def update_interval_minutes(self, minutes: int):
         """
@@ -275,7 +442,7 @@ class PostScheduler:
                 return
             
             # Получаем список всех групп
-            groups = await db.get_all_groups()
+            groups = await db.get_active_groups()
             
             if not groups:
                 logger.warning("❌ Нет групп для публикации")
@@ -323,16 +490,34 @@ class PostScheduler:
                     target = username if username else chat_id
                     
                     # Пытаемся отправить пост с повторными попытками
-                    success = await self._send_post_with_retry(target, group_name, i+1, len(groups))
+                    success, retry_count = await self._send_post_with_retry(target, group_name, i+1, len(groups))
                     
+                    # Записываем в историю публикаций
                     if success:
                         # Обновляем время последней публикации
                         await db.update_last_posted(chat_id)
+                        # Записываем успешную публикацию в историю
+                        await db.add_publication_history(
+                            chat_id=chat_id,
+                            chat_title=group_name,
+                            chat_username=username,
+                            status='success',
+                            retry_count=retry_count
+                        )
                         logger.info(f"✅ [{i+1}/{len(groups)}] Пост отправлен в группу {group_name}")
                         self._update_status(f"✅ Группа {i+1}/{len(groups)}: {group_name} - успешно")
                     else:
                         error_msg = f"Ошибка отправки в группу {group_name} после {PUBLICATION_RETRY_ATTEMPTS} попыток"
                         logger.error(f"❌ [{i+1}/{len(groups)}] {error_msg}")
+                        # Записываем неудачную публикацию в историю
+                        await db.add_publication_history(
+                            chat_id=chat_id,
+                            chat_title=group_name,
+                            chat_username=username,
+                            status='error',
+                            error_message=error_msg,
+                            retry_count=retry_count
+                        )
                         self.publication_status['errors'].append({
                             'group': group_name,
                             'error': error_msg,
@@ -367,6 +552,15 @@ class PostScheduler:
                 except Exception as e:
                     error_msg = f"Ошибка при публикации в группу {chat_id}: {e}"
                     logger.error(f"❌ {error_msg}")
+                    # Записываем исключение в историю
+                    await db.add_publication_history(
+                        chat_id=chat_id,
+                        chat_title=chat_id,  # Если не удалось получить название
+                        chat_username=username,
+                        status='error',
+                        error_message=str(e),
+                        retry_count=0
+                    )
                     self.publication_status['errors'].append({
                         'group': chat_id,
                         'error': error_msg,
@@ -404,7 +598,7 @@ class PostScheduler:
                 'last_update': datetime.now(pytz.utc).astimezone(MOSCOW_TZ)
             })
     
-    async def _send_post_with_retry(self, target: str, group_name: str, current: int, total: int) -> bool:
+    async def _send_post_with_retry(self, target: str, group_name: str, current: int, total: int) -> tuple:
         """
         Отправка поста с повторными попытками при ошибках
         
@@ -415,32 +609,35 @@ class PostScheduler:
             total: Всего групп
             
         Returns:
-            True если отправка успешна, False если все попытки исчерпаны
+            tuple: (success: bool, retry_count: int)
         """
+        retry_count = 0
         for attempt in range(1, PUBLICATION_RETRY_ATTEMPTS + 1):
             try:
-                success = await self.post_handler.send_post_to_group(target)
+                success = await self.post_handler.send_post_to_group(target, group_name)
                 
                 if success:
                     if attempt > 1:
                         logger.info(f"✅ [{current}/{total}] Пост отправлен в группу {group_name} после {attempt} попыток")
-                    return True
+                    return True, retry_count
                 else:
+                    retry_count = attempt
                     if attempt < PUBLICATION_RETRY_ATTEMPTS:
                         logger.warning(f"⚠️ [{current}/{total}] Попытка {attempt}/{PUBLICATION_RETRY_ATTEMPTS} не удалась для {group_name}. Повтор через {PUBLICATION_RETRY_DELAY} сек...")
                         await asyncio.sleep(PUBLICATION_RETRY_DELAY)
                     else:
                         logger.error(f"❌ [{current}/{total}] Все {PUBLICATION_RETRY_ATTEMPTS} попыток отправки в {group_name} не удались")
-                        return False
+                        return False, retry_count
             except Exception as e:
+                retry_count = attempt
                 if attempt < PUBLICATION_RETRY_ATTEMPTS:
                     logger.warning(f"⚠️ [{current}/{total}] Исключение при попытке {attempt}/{PUBLICATION_RETRY_ATTEMPTS} для {group_name}: {e}. Повтор через {PUBLICATION_RETRY_DELAY} сек...")
                     await asyncio.sleep(PUBLICATION_RETRY_DELAY)
                 else:
                     logger.error(f"❌ [{current}/{total}] Исключение после всех {PUBLICATION_RETRY_ATTEMPTS} попыток для {group_name}: {e}")
-                    return False
+                    return False, retry_count
         
-        return False
+        return False, retry_count
     
     def _update_status(self, step: str):
         """Обновление статуса публикации"""

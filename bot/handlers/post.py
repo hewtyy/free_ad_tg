@@ -3,8 +3,14 @@
 """
 import asyncio
 from pathlib import Path
+from datetime import datetime
+import random
+import pytz
 from config import POST_TEXT_FILE, POST_IMAGE_FILE
 from telegram_client import telegram_client
+from db import db
+
+MOSCOW_TZ = pytz.timezone('Europe/Moscow')
 
 
 class PostHandler:
@@ -13,19 +19,46 @@ class PostHandler:
     def __init__(self):
         self.post_text = None
         self.post_image_path = None
+        self.use_template = False
         self._load_post_content()
     
     def _load_post_content(self):
-        """Загрузка содержимого поста из файлов"""
+        """Загрузка содержимого поста из файлов или шаблона"""
         try:
-            # Загружаем текст поста
-            if POST_TEXT_FILE.exists():
-                with open(POST_TEXT_FILE, 'r', encoding='utf-8') as f:
-                    self.post_text = f.read().strip()
-                print(f"✓ Текст поста загружен из {POST_TEXT_FILE} ({len(self.post_text)} символов)")
+            # Проверяем, есть ли активный шаблон
+            # Используем более безопасный подход для работы с asyncio
+            template = None
+            try:
+                # Пытаемся получить event loop
+                try:
+                    loop = asyncio.get_running_loop()
+                    # Если event loop уже запущен, создаем задачу через create_task
+                    # Но это синхронный метод, поэтому используем другой подход
+                    import concurrent.futures
+                    with concurrent.futures.ThreadPoolExecutor() as executor:
+                        future = executor.submit(asyncio.run, db.get_active_template())
+                        template = future.result(timeout=1)
+                except RuntimeError:
+                    # Нет запущенного event loop, можно использовать asyncio.run
+                    template = asyncio.run(db.get_active_template())
+            except Exception:
+                # Если не удалось получить шаблон, просто пропускаем его
+                template = None
+            
+            if template:
+                self.post_text = template[2]  # content
+                self.use_template = True
+                print(f"✓ Текст поста загружен из шаблона '{template[1]}' ({len(self.post_text)} символов)")
             else:
-                self.post_text = "Тестовый пост для автоматической публикации"
-                print(f"⚠ Файл с текстом поста не найден ({POST_TEXT_FILE}), используется текст по умолчанию")
+                # Загружаем из файла
+                if POST_TEXT_FILE.exists():
+                    with open(POST_TEXT_FILE, 'r', encoding='utf-8') as f:
+                        self.post_text = f.read().strip()
+                    print(f"✓ Текст поста загружен из {POST_TEXT_FILE} ({len(self.post_text)} символов)")
+                else:
+                    self.post_text = "Тестовый пост для автоматической публикации"
+                    print(f"⚠ Файл с текстом поста не найден ({POST_TEXT_FILE}), используется текст по умолчанию")
+                self.use_template = False
             
             # Проверяем наличие изображения
             if POST_IMAGE_FILE.exists():
@@ -41,37 +74,104 @@ class PostHandler:
             traceback.print_exc()
             self.post_text = "Ошибка загрузки поста"
             self.post_image_path = None
+            self.use_template = False
     
-    async def send_post_to_group(self, chat_id: str) -> bool:
+    def _replace_variables(self, text: str, chat_id: str = None, chat_title: str = None) -> str:
+        """
+        Замена переменных в тексте шаблона
+        
+        Доступные переменные:
+        - {date} - текущая дата
+        - {time} - текущее время
+        - {datetime} - дата и время
+        - {chat_id} - ID чата
+        - {chat_title} - название чата
+        - {random_number} - случайное число от 1 до 1000
+        - {random_number:min:max} - случайное число от min до max
+        
+        Args:
+            text: Текст с переменными
+            chat_id: ID чата (опционально)
+            chat_title: Название чата (опционально)
+            
+        Returns:
+            Текст с замененными переменными
+        """
+        now = datetime.now(pytz.utc).astimezone(MOSCOW_TZ)
+        
+        # Заменяем переменные
+        text = text.replace('{date}', now.strftime('%d.%m.%Y'))
+        text = text.replace('{time}', now.strftime('%H:%M'))
+        text = text.replace('{datetime}', now.strftime('%d.%m.%Y %H:%M'))
+        
+        if chat_id:
+            text = text.replace('{chat_id}', str(chat_id))
+        
+        if chat_title:
+            text = text.replace('{chat_title}', chat_title)
+        
+        # Обработка {random_number}
+        import re
+        
+        # Заменяем {random_number}
+        text = re.sub(r'\{random_number\}', lambda m: str(random.randint(1, 1000)), text)
+        
+        # Заменяем {random_number:min:max}
+        def replace_random_range(match):
+            try:
+                min_val = int(match.group(1))
+                max_val = int(match.group(2))
+                return str(random.randint(min_val, max_val))
+            except:
+                return match.group(0)
+        
+        text = re.sub(r'\{random_number:(\d+):(\d+)\}', replace_random_range, text)
+        
+        return text
+    
+    async def get_post_text(self, chat_id: str = None, chat_title: str = None) -> str:
+        """
+        Получение текста поста с заменой переменных
+        
+        Args:
+            chat_id: ID чата (для переменных)
+            chat_title: Название чата (для переменных)
+            
+        Returns:
+            Текст поста с замененными переменными
+        """
+        if not self.post_text:
+            return ""
+        
+        if self.use_template:
+            return self._replace_variables(self.post_text, chat_id, chat_title)
+        else:
+            return self.post_text
+    
+    async def send_post_to_group(self, chat_id: str, chat_title: str = None) -> bool:
         """
         Отправка поста в группу или канал
         
         Args:
             chat_id: ID чата для отправки
+            chat_title: Название чата (для переменных в шаблонах)
             
         Returns:
             True если пост отправлен успешно, False в противном случае
         """
         try:
+            # Получаем текст поста с заменой переменных
+            post_text = await self.get_post_text(chat_id, chat_title)
+            
             # Проверяем, что у нас есть текст для отправки
-            if not self.post_text:
+            if not post_text:
                 print("Нет текста для отправки")
                 return False
             
-            # Временно отключаем проверку доступа из-за проблем с event loop
-            # has_access = await telegram_client.check_chat_access(chat_id)
-            # if not has_access:
-            #     print(f"Нет доступа к чату {chat_id}")
-            #     # Удаляем группу из базы данных
-            #     from db import db
-            #     await db.remove_group(chat_id)
-            #     return False
-            
             # Отправляем пост через Telegram Client API
-            # Используем синхронный подход для избежания проблем с event loop
             success = await self._send_message_sync(
                 chat_id=chat_id,
-                text=self.post_text,
+                text=post_text,
                 image_path=self.post_image_path
             )
             
@@ -80,7 +180,6 @@ class PostHandler:
             else:
                 print(f"✗ Ошибка отправки в {chat_id}")
                 # Удаляем группу из базы данных при ошибке
-                from db import db
                 await db.remove_group(chat_id)
             
             return success
@@ -88,7 +187,6 @@ class PostHandler:
         except Exception as e:
             print(f"Неожиданная ошибка при отправке в чат {chat_id}: {e}")
             # Удаляем группу из базы данных при ошибке
-            from db import db
             await db.remove_group(chat_id)
             return False
     
@@ -212,8 +310,28 @@ class PostHandler:
         Returns:
             Словарь с информацией о посте
         """
+        template = None
+        try:
+            try:
+                loop = asyncio.get_running_loop()
+                # Если event loop уже запущен, используем ThreadPoolExecutor
+                import concurrent.futures
+                with concurrent.futures.ThreadPoolExecutor() as executor:
+                    future = executor.submit(asyncio.run, db.get_active_template())
+                    template = future.result(timeout=1)
+            except RuntimeError:
+                # Нет запущенного event loop, можно использовать asyncio.run
+                template = asyncio.run(db.get_active_template())
+        except Exception:
+            template = None
+        
         return {
+            'text': self.post_text or '',
             'text_length': len(self.post_text) if self.post_text else 0,
-            'has_image': self.post_image_path is not None and self.post_image_path.exists(),
-            'text_preview': self.post_text[:100] + '...' if self.post_text and len(self.post_text) > 100 else self.post_text
+            'has_image': self.post_image_path is not None and (self.post_image_path.exists() if self.post_image_path else False),
+            'image_path': str(self.post_image_path) if self.post_image_path else None,
+            'text_preview': self.post_text[:100] + '...' if self.post_text and len(self.post_text) > 100 else (self.post_text or ''),
+            'use_template': self.use_template,
+            'template_name': template[1] if template else None,
+            'template_id': template[0] if template else None
         }
