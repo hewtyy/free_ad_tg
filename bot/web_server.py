@@ -268,10 +268,18 @@ def init_web_server():
 
 @app.route('/static/<path:filename>')
 def serve_static(filename):
-    """Сервирование статических файлов (изображений)"""
+    """Сервирование статических файлов (CSS, JS, изображения)"""
     try:
-        data_dir = Path(__file__).parent / 'data'
-        return send_from_directory(str(data_dir), filename)
+        # Проверяем, является ли файл CSS или JS
+        if filename.endswith('.css'):
+            static_dir = Path(__file__).parent / 'static' / 'css'
+        elif filename.endswith('.js'):
+            static_dir = Path(__file__).parent / 'static' / 'js'
+        else:
+            # Для изображений используем папку data
+            static_dir = Path(__file__).parent / 'data'
+        
+        return send_from_directory(str(static_dir), filename)
     except Exception as e:
         logger.error(f"Ошибка загрузки файла {filename}: {e}")
         return jsonify({'error': 'File not found'}), 404
